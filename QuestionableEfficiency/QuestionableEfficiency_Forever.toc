@@ -4,8 +4,8 @@
 ## Version: 0.1.1
 ## Dependencies: QuestieDB
 ## X-License: GPL-3.0-only
-## SavedVariables: QuestionalEfficiencySettings
-## SavedVariablesPerCharacter: QuestionalEfficiencyCharacter
+## SavedVariables: QuestionableEfficiencySettings
+## SavedVariablesPerCharacter: QuestionableEfficiencyCharacter
 
 Client.lua
 QuestData.lua

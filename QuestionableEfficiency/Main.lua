@@ -71,7 +71,7 @@ reevaluate = function(message, force, undoPlan)
             quest.chain, quest.chainSource = chain, "your note"
         end
     end
-    QuestionalEfficiencyCharacter = addon.manual.current
+    QuestionableEfficiencyCharacter = addon.manual.current
     local previous = addon.plan
     addon.snapshot, addon.origin = snapshot, Client.PlayerPosition()
     addon.plan = Route.Build(snapshot, addon.manual.current, addon.origin, undoPlan or previous, force)

@@ -11,10 +11,6 @@ Questionable Efficiency routes quests already in your World of Warcraft: Forever
 3. Install the required [QuestieDB Forever release](https://github.com/Questie/QuestieDB/releases/latest). The single-flavor **Forever** ZIP and the release's recommended **all** ZIP both work. Extract the `QuestieDB` folder next to `QuestionableEfficiency`. Verify that it contains `QuestieDB_Forever.toc`. If you already have the correct version, keep it. Update QuestieDB with the maintainer's packaged addon instructions.
 4. Start Forever and enable **Questionable Efficiency** and **QuestieDB** in the character-select **AddOns** list. Log in and type `/qe show`.
 
-### Upgrading from Questional Efficiency
-
-With WoW closed, move the old `QuestionalEfficiency` folder out of **AddOns** before installing `QuestionableEfficiency`. To keep your settings, copy each `QuestionalEfficiency.lua` in the Forever installation's `WTF\Account` SavedVariables folders to `QuestionableEfficiency.lua` in the same folder. This applies to both account-wide and per-character SavedVariables. Keep any `QuestionableEfficiency.lua` that already exists. Enable the renamed addon at character selection.
-
 QuestieDB supplies quest levels, coordinates, turn-in locations and chain data. Questie can stay disabled. World-map markers and the arrow use Blizzard UI APIs. The installed files run inside WoW without network services, API keys or a companion app.
 
 ## Commands and controls

@@ -60,7 +60,11 @@ local function event(eventName, ...)
     for _, fn in ipairs(scheduled) do fn() end
 end
 
+QuestionableEfficiencySettings = { pins = false }
+QuestionableEfficiencyCharacter = { chains = { [11] = "final" } }
 event("ADDON_LOADED", name)
+assert(addon.preferences.pins == false)
+assert(addon.manual.current.chains[11] == "final")
 event("PLAYER_ENTERING_WORLD")
 assert(addon.plan.steps[1].quest.id == 10)
 assert(addon.UI.frame:IsShown())

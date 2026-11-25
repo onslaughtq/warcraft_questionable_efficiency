@@ -149,14 +149,14 @@ function Settings.Apply(state, command, task, quest)
 end
 
 function Settings.Init()
-    if type(QuestionalEfficiencySettings) ~= "table" then QuestionalEfficiencySettings = {} end
-    local saved = QuestionalEfficiencySettings
+    if type(QuestionableEfficiencySettings) ~= "table" then QuestionableEfficiencySettings = {} end
+    local saved = QuestionableEfficiencySettings
     if type(saved.visible) ~= "boolean" then saved.visible = true end
     if type(saved.pins) ~= "boolean" then saved.pins = true end
     if type(saved.arrow) ~= "boolean" then saved.arrow = true end
     addon.preferences = saved
-    addon.manual = Settings.New(QuestionalEfficiencyCharacter)
-    QuestionalEfficiencyCharacter = addon.manual.current
+    addon.manual = Settings.New(QuestionableEfficiencyCharacter)
+    QuestionableEfficiencyCharacter = addon.manual.current
 end
 
 function Settings.Reanchor(frame)

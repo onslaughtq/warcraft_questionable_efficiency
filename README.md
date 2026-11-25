@@ -1,5 +1,7 @@
 # Questionable Efficiency
 
+<img src="assets/logo.png" width="128" height="128" alt="Questionable Efficiency logo">
+
 **This project is 100% vibe-coded and requires QuestieDB for World of Warcraft: Forever.**
 
 Questionable Efficiency routes quests already in your World of Warcraft: Forever quest log. It sorts by quest level, then favors shorter straight-line legs among objectives at the same level. When the log is full, it looks for a practical way to free one slot.
@@ -50,7 +52,17 @@ This source targets Forever `1.60.1.71091`, product `wowf`, Interface `16001`. T
 
 Run `lua5.1 tests/run.lua` and `lua5.1 tests/smoke.lua` from the repository root. For syntax checks, run `luac5.1 -p` on the addon and test Lua files. The tests supply mock client data to the actual routing and adapter code. Source files are separated into the client adapter, QuestieDB adapter, route, saved settings, navigation, UI and event controller. Keep editing here and copy only the addon folder's contents for installation.
 
-Technical references used for this build
+## Build the CurseForge ZIP
+
+With Docker and the Compose plugin running, run this from the repository root in Bash:
+
+```bash
+bash ./build-release.sh
+```
+
+The script runs the `package` service in `compose.yaml`. Docker builds an Alpine image with the `zip` utility and reuses the cached build on subsequent runs. The container reads the version from the addon manifest and writes `dist/QuestionableEfficiency-<version>.zip` on your machine. The ZIP contains the addon files and GPLv3 license under one `QuestionableEfficiency/` folder. Upload it for **WoW Forever** and select **QuestieDB** as a required dependency. The [project logo](assets/logo.png) is a separate upload.
+
+## Technical references
 
 - [Forever Blizzard quest API documentation from matching build](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_APIDocumentationGenerated/QuestLogDocumentation.lua) and [Forever's Blizzard quest-count UI](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_UIPanels_Game/Camelot/QuestMapFrameUtils.lua).
 - [Forever Blizzard map API documentation](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_APIDocumentationGenerated/MapDocumentation.lua) and [Blizzard MapCanvas source](https://github.com/Gethe/wow-ui-source/tree/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_MapCanvas).

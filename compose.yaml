@@ -1,0 +1,12 @@
+services:
+  package:
+    build:
+      context: ./scripts
+      dockerfile: package.Dockerfile
+    user: "${QE_PACKAGE_UID:-1000}:${QE_PACKAGE_GID:-1000}"
+    network_mode: none
+    working_dir: /source
+    volumes:
+      - .:/source:ro
+      - ./dist:/output
+    command: ["sh", "scripts/package-release.sh", "/output"]

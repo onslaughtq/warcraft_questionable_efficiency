@@ -1,0 +1,2 @@
+/build-release.sh text eol=lf
+/scripts/package-release.sh text eol=lf

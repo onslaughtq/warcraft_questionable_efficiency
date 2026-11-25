@@ -26,15 +26,16 @@ local function locationRank(from, to)
 end
 
 local function closest(task, from, previous)
+    local points = task.routingPoints or task.points
     if previous and previous.key == task.key and previous.point then
-        for _, point in ipairs(task.points) do
+        for _, point in ipairs(points) do
             if point.map == previous.point.map and point.x == previous.point.x and point.y == previous.point.y then
                 return point
             end
         end
     end
     local best, bestRank, bestDistance
-    for _, point in ipairs(task.points) do
+    for _, point in ipairs(points) do
         local rank, distance = locationRank(from, point)
         if not best or rank < bestRank or (rank == bestRank and distance < bestDistance) then
             best, bestRank, bestDistance = point, rank, distance
@@ -132,7 +133,7 @@ local function estimateLeg(from, to)
     return 12500
 end
 
-local function finishCost(tasks, quest, origin)
+local function finishCost(tasks, quest, origin, finishers)
     local remaining, work, travel = {}, 0, 0
     for i, task in ipairs(tasks) do remaining[i] = task end
     local from = origin
@@ -145,33 +146,59 @@ local function finishCost(tasks, quest, origin)
         end
     end
     if not quest.complete then
-        local turnin = closest(quest.turnin or { points = {} }, from)
+        local turnin = closest({ points = finishers }, from)
         travel = travel + estimateLeg(from, turnin)
     end
-    local chainCost = ({ standalone = 0, final = 0, unknown = 1200, followup = 2100 })[quest.chain] or 1200
+    local chainCost = ({ standalone = 0, final = 0, unrecorded = 800, unknown = 1200, followup = 2100 })[quest.chain] or 1200
     return travel + work + chainCost + (quest.complete and 0 or 3200)
 end
 
-local function fullGoal(eligible, tasks, origin, previous)
-    local groups, deferred = {}, {}
+local function fullCandidates(eligible, tasks, isExplored)
+    local groups, deferred, blocked, finishers, cache = {}, {}, {}, {}, {}
+    local function exploredPoints(points)
+        local known = {}
+        for _, point in ipairs(points or {}) do
+            local key = point.map .. ":" .. point.x .. ":" .. point.y
+            if cache[key] == nil then cache[key] = isExplored and isExplored(point) == true or false end
+            if cache[key] then known[#known + 1] = point end
+        end
+        return known
+    end
     for _, task in ipairs(tasks) do
         local id = task.quest.id
         groups[id] = groups[id] or {}
         groups[id][#groups[id] + 1] = task
         if not eligible[task.key] then deferred[id] = true end
     end
-    if previous and groups[previous] and not deferred[previous] then return previous end
+    for id, steps in pairs(groups) do
+        local quest = steps[1].quest
+        if deferred[id] then
+            groups[id] = nil
+        else
+            for _, task in ipairs(steps) do
+                local points = exploredPoints(task.points)
+                if #points > 0 then task.routingPoints = points else blocked[id] = true end
+            end
+            if not quest.complete then
+                finishers[id] = exploredPoints(quest.turnin and quest.turnin.points)
+                if #finishers[id] == 0 then blocked[id] = true end
+            end
+            if blocked[id] then groups[id] = nil end
+        end
+    end
+    return groups, finishers, blocked
+end
+
+local function fullGoal(groups, finishers, origin, previous)
+    if previous and groups[previous] then return previous end
     local best, bestCost
     for id, steps in pairs(groups) do
-        -- A quest with a deferred required step cannot be our slot-freeing plan.
-        if not deferred[id] then
-            local quest = steps[1].quest
-            local cost = finishCost(steps, quest, origin)
-            if not best or cost < bestCost or (cost == bestCost and
-                ((quest.level or math.huge) < (best.level or math.huge)
-                or (quest.level == best.level and id < best.id))) then
-                best, bestCost = quest, cost
-            end
+        local quest = steps[1].quest
+        local cost = finishCost(steps, quest, origin, finishers[id])
+        if not best or cost < bestCost or (cost == bestCost and
+            ((quest.level or math.huge) < (best.level or math.huge)
+            or (quest.level == best.level and id < best.id))) then
+            best, bestCost = quest, cost
         end
     end
     return best and best.id
@@ -186,6 +213,8 @@ local function fullReason(task)
         return "Quest log full: " .. action .. " chain ending to free a slot (" .. (quest.chainSource or "QuestieDB") .. ")."
     elseif quest.chain == "followup" then
         return "Quest log full: " .. action .. " quest and defer any offered follow-up to keep the slot open."
+    elseif quest.chain == "unrecorded" then
+        return "Quest log full: " .. action .. " quest to free a slot. QuestieDB records no follow-up, but one may exist."
     end
     return "Quest log full: " .. action .. " quest to free a slot. Follow-up status is unknown."
 end
@@ -212,11 +241,31 @@ function Route.Build(snapshot, manual, origin, previous, force)
     local sameMode = previous and previous.full == full and not force
     local held = sameMode and previous.steps[1] or nil
     local steps, current, purpose = {}
-    local goal = full and fullGoal(eligible, permitted, origin, held and eligible[held.key] and previous.goal) or nil
+    local goal, groups, blocked
+    if full then
+        local finishers
+        groups, finishers, blocked = fullCandidates(eligible, permitted, snapshot.isExplored)
+        goal = fullGoal(groups, finishers, origin, held and eligible[held.key] and previous.goal)
+    end
     current = takeKey(pool, origin, manual.next, held)
+    if full then
+        local automatic = {}
+        for _, task in ipairs(pool) do
+            if groups[task.quest.id] then
+                automatic[#automatic + 1] = task
+            elseif blocked[task.quest.id] then
+                status[task.key] = "exploration"
+            end
+        end
+        pool = automatic
+    end
     if current then
         purpose = "Manual priority: Do this next."
-        if full then purpose = purpose .. " " .. fullReason(current) end
+        if full and blocked[current.quest.id] then
+            purpose = purpose .. " Exploration is unconfirmed for one or more stops."
+        elseif full and groups[current.quest.id] then
+            purpose = purpose .. " " .. fullReason(current)
+        end
     elseif #pool > 0 then
         if held and eligible[held.key] then
             if full and goal and held.quest.id == goal then
@@ -232,13 +281,13 @@ function Route.Build(snapshot, manual, origin, previous, force)
         current = current or takeNearest(pool, origin, not goal, goal)
         if goal then
             purpose = fullReason(current)
-        elseif full then
-            purpose = "Quest log full: deferred steps prevent a complete slot-freeing plan. Showing remaining steps by level."
         elseif current.quest.level then
             purpose = "Lowest quest level first. Same-level steps use estimated straight-line distance where available."
         else
             purpose = "Quest level unknown. Known quest levels come first."
         end
+    elseif full then
+        purpose = "Quest log full: no eligible quest has a complete route through confirmed explored stops. See Quest log."
     else
         purpose = "No eligible steps. Review the quest list for exclusions or deferred objectives."
     end

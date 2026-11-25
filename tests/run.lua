@@ -34,7 +34,8 @@ local function quest(id, level, fields)
 end
 
 local function snapshot(quests, count, capacity)
-    return { quests = quests, count = count or #quests, capacity = capacity, completeRead = true }
+    return { quests = quests, count = count or #quests, capacity = capacity, completeRead = true,
+        isExplored = function(stop) return stop.explored ~= false end }
 end
 
 local function manual()
@@ -206,7 +207,53 @@ test("QuestieDB branches, reverse links, authored zero, and unknown chain status
     eq(Data.Chain(3, db), "unknown")
     eq(Data.Chain(5, db, provenance), "standalone")
     eq(Data.Chain(6, db), "unknown")
-    eq(Data.Chain(7, db, provenance), "unknown")
+    eq(Data.Chain(7, db, provenance), "unrecorded")
+end)
+
+test("full-log routing requires explored objectives and turn-in and uses only explored alternatives", function()
+    local undiscovered = point(20)
+    undiscovered.explored = false
+    local blocked = quest(1, 7, { complete = true, chain = "final", turnin = { points = { undiscovered } } })
+    local everywhere = step(1, undiscovered)
+    everywhere.points[2] = point(170)
+    local noFinisher = quest(2, 5, { chain = "standalone", objectives = { everywhere },
+        turnin = { points = { undiscovered } } })
+    local mixed = quest(3, 14, { chain = "unrecorded", objectives = { everywhere },
+        turnin = { points = { point(190) } } })
+    local log = snapshot({ blocked, noFinisher, mixed }, 3, 3)
+    local choices = manual()
+    local plan = Route.Build(log, choices, point(0))
+    eq(plan.goal, 3)
+    eq(plan.steps[1].point.wx, 170)
+    eq(plan.status["1:turnin"], "exploration")
+    eq(plan.status["2:1"], "exploration")
+    assert(plan.reason:find("one may exist", 1, true))
+    log.isExplored = nil
+    plan = Route.Build(log, choices, point(0), plan)
+    eq(#plan.steps, 0)
+    eq(plan.byKey["1:turnin"].quest, blocked)
+    choices.next = "1:turnin"
+    eq(Route.Build(log, choices, point(0)).steps[1].point, undiscovered)
+    log.count = 2
+    choices.next = nil
+    eq(Route.Build(log, choices, point(0)).steps[1].quest.id, 2)
+end)
+
+test("exploration adapter only accepts positive evidence from the client", function()
+    CreateVector2D = function(x, y) return { x = x, y = y } end
+    local stop = point(400)
+    eq(Client.IsExplored(stop), false)
+    C_MapExplorationInfo = { GetExploredAreaIDsAtPosition = function(id, v)
+        eq(id, stop.map)
+        eq(v.x, stop.x)
+        return { 21 }
+    end }
+    eq(Client.IsExplored(stop), true)
+    C_MapExplorationInfo.GetExploredAreaIDsAtPosition = function() return {} end
+    eq(Client.IsExplored(stop), false)
+    C_MapExplorationInfo.GetExploredAreaIDsAtPosition = function() return nil end
+    eq(Client.IsExplored(stop), false)
+    C_MapExplorationInfo = nil
 end)
 
 test("missing provider, level, locations and unavailable player position retain visible work", function()

@@ -194,6 +194,20 @@ function Client.Project(point, mapID)
     if x and x >= 0 and x <= 1 and y >= 0 and y <= 1 then return x, y end
 end
 
+function Client.IsExplored(point)
+    local api = C_MapExplorationInfo and C_MapExplorationInfo.GetExploredAreaIDsAtPosition
+    if type(api) ~= "function" then return false end
+    local vector = call(CreateVector2D, point.x, point.y)
+    if not (readable(vector, "table") or readable(vector, "userdata")) then return false end
+    local areas = call(api, point.map, vector)
+    if readable(areas, "table") then
+        for _, area in ipairs(areas) do
+            if positive(area) then return true end
+        end
+    end
+    return false
+end
+
 function Client.BuildLabel()
     if type(GetBuildInfo) ~= "function" then return "unknown" end
     local version, build, _, interface = GetBuildInfo()

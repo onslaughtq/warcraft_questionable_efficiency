@@ -5,6 +5,11 @@ local events = CreateFrame("Frame")
 local positionTimer, updatePending, providerTimer
 local entered, signature, providerRefresh = false, nil, nil
 local builds, dataErrors = 0, 0
+local explorationRevision = 0
+
+local function isFull(snapshot)
+    return snapshot.capacity and snapshot.count and snapshot.count >= snapshot.capacity
+end
 
 local function summarize(snapshot)
     local records = {}
@@ -20,7 +25,7 @@ local function summarize(snapshot)
     end
     table.sort(records)
     records[#records + 1] = table.concat({ snapshot.count or "?", snapshot.capacity or "?", snapshot.warning or "",
-        Data.status, tostring(Data.chainReady), tostring(Data.chainFailed) }, "\030")
+        Data.status, tostring(Data.chainReady), tostring(Data.chainFailed), isFull(snapshot) and explorationRevision or 0 }, "\030")
     return table.concat(records, "\029")
 end
 
@@ -52,6 +57,7 @@ reevaluate = function(message, force, undoPlan)
     if not entered then return end
     checkDB()
     local snapshot = Client.ReadLog()
+    snapshot.isExplored = Client.IsExplored
     local newSignature = summarize(snapshot)
     if not (force or message or providerRefresh) and signature == newSignature then return end
     signature, providerRefresh = newSignature, nil
@@ -61,7 +67,7 @@ reevaluate = function(message, force, undoPlan)
     Settings.Reconcile(addon.manual, byKey, byId, snapshot.completeRead)
     for _, quest in ipairs(snapshot.quests) do
         local chain = addon.manual.current.chains[quest.id]
-        if quest.chain == "unknown" and chain then
+        if Data.ChainUnconfirmed(quest) and chain then
             quest.chain, quest.chainSource = chain, "your note"
         end
     end
@@ -116,7 +122,7 @@ function addon.ManualAction(command, selected)
     if (command == "next" or command == "skip" or command == "resume")
         and (not task or addon.plan.status[task.key] == "excluded") then return end
     if (command == "standalone" or command == "final")
-        and (not quest or (quest.chain ~= "unknown" and quest.chainSource ~= "your note")) then return end
+        and (not quest or (not Data.ChainUnconfirmed(quest) and quest.chainSource ~= "your note")) then return end
     local history = addon.manual.history
     local undoPlan = command == "undo" and history[#history] and history[#history].plan or nil
     local previous = addon.plan
@@ -132,16 +138,20 @@ end
 
 function addon.Diagnostics()
     local snapshot, plan = addon.snapshot, addon.plan
-    local unknownLocations, unknownChains, missingRecords = 0, 0, 0
+    local unknownLocations, unknownChains, missingRecords, unrecordedChains, explorationBlocked = 0, 0, 0, 0, {}
     for _, task in ipairs(plan and plan.all or {}) do
         if #task.points == 0 then unknownLocations = unknownLocations + 1 end
+        if plan.status[task.key] == "exploration" then explorationBlocked[task.quest.id] = true end
     end
     for _, quest in ipairs(snapshot and snapshot.quests or {}) do
         if quest.chain == "unknown" then unknownChains = unknownChains + 1 end
+        if quest.chain == "unrecorded" then unrecordedChains = unrecordedChains + 1 end
         if not quest.inDatabase then missingRecords = missingRecords + 1 end
     end
+    local blockedCount = 0
+    for _ in pairs(explorationBlocked) do blockedCount = blockedCount + 1 end
     return table.concat({
-        "Questional Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.1.0"),
+        "Questional Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.1.1"),
         "Client: " .. Client.BuildLabel(),
         "Quest log: " .. tostring(snapshot and snapshot.count or "?") .. " / " .. tostring(snapshot and snapshot.capacity or "?"),
         "Readable quests: " .. tostring(snapshot and #snapshot.quests or 0),
@@ -151,6 +161,8 @@ function addon.Diagnostics()
             or (Data.chainJob and "building" or "unavailable"))),
         ("Unknown chains: %d; no DB record: %d; unknown locations: %d; DB read failures: %d"):format(
             unknownChains, missingRecords, unknownLocations, dataErrors),
+        ("No follow-up recorded (unconfirmed): %d; full-log quests blocked by unconfirmed exploration: %d"):format(
+            unrecordedChains, blockedCount),
         ("Navigation: %s; player position %s; arrow preference %s"):format(Navigation.mapStatus,
             addon.origin and "available" or "unavailable", addon.preferences.arrow and "on" or "off"),
         "Route builds: " .. builds,
@@ -231,6 +243,11 @@ local function onEvent(_, event, first, second)
         queueUpdate()
     elseif event == "QUEST_DATA_LOAD_RESULT" then
         if Client.Readable(second, "boolean") and second then queueUpdate() end
+    elseif event == "MAP_EXPLORATION_UPDATED" then
+        if addon.plan and addon.plan.full then
+            explorationRevision = explorationRevision + 1
+            queueUpdate()
+        end
     else
         queueUpdate()
     end
@@ -239,6 +256,6 @@ end
 events:SetScript("OnEvent", onEvent)
 for _, event in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "QUEST_LOG_UPDATE",
     "QUEST_ACCEPTED", "QUEST_REMOVED", "QUEST_TURNED_IN", "QUEST_DATA_LOAD_RESULT",
-    "QUEST_LOG_CRITERIA_UPDATE" }) do
+    "QUEST_LOG_CRITERIA_UPDATE", "MAP_EXPLORATION_UPDATED" }) do
     events:RegisterEvent(event)
 end

@@ -3,6 +3,10 @@ local Client = addon.Client
 local Data = { status = "QuestieDB unavailable. Enable its Forever release for coordinates and chains." }
 addon.Data = Data
 
+function Data.ChainUnconfirmed(quest)
+    return quest.chain == "unknown" or quest.chain == "unrecorded"
+end
+
 local function supportTable(encoded)
     if type(encoded) == "table" then return encoded end
     if type(encoded) == "string" and type(loadstring) == "function" then
@@ -144,6 +148,7 @@ function Data.Chain(id, quests, provenance)
                 or #(read(quests, id, "preQuestGroup") or {}) > 0
             return incoming and "final" or "standalone"
         end
+        return "unrecorded"
     end
     return "unknown"
 end

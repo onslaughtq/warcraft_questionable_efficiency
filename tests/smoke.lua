@@ -87,9 +87,24 @@ assert(addon.plan.steps[1].quest.id == 10)
 count = cap
 event("QUEST_LOG_UPDATE")
 assert(addon.plan.full and addon.notice:find("reached capacity", 1, true))
+assert(#addon.plan.steps == 0)
+local explored = false
+C_MapExplorationInfo = { GetExploredAreaIDsAtPosition = function() return explored and { 21 } or nil end }
+local enrich = addon.Data.Enrich
+addon.Data.Enrich = function(snapshot)
+    local result = enrich(snapshot)
+    for _, quest in ipairs(snapshot.quests) do
+        if quest.id == 10 then quest.turnin = { text = "Turn in", points = { first.point } } end
+    end
+    return result
+end
 completed[10] = true
 event("QUEST_LOG_UPDATE")
 assert(addon.plan.byKey["10:turnin"])
+assert(#addon.plan.steps == 0 and addon.plan.status["10:turnin"] == "exploration")
+explored = true
+event("MAP_EXPLORATION_UPDATED")
+assert(addon.plan.steps[1].key == "10:turnin")
 table.remove(logEntries, 1)
 count = 1
 event("QUEST_REMOVED", 10)
@@ -100,4 +115,4 @@ SlashCmdList.QUESTIONALEFFICIENCY("hide")
 assert(not addon.UI.frame:IsShown())
 SlashCmdList.QUESTIONALEFFICIENCY("show")
 assert(addon.UI.frame:IsShown())
-print("PASS TOC loads, window startup, stable navigation tick, clicks, progress, full-log events and slash commands")
+print("PASS TOC loads, window startup, stable navigation tick, clicks, progress, full-log and exploration events, and slash commands")

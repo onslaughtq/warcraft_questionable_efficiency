@@ -49,7 +49,8 @@ local function flags(quest)
     local labels = {}
     if quest.group and not quest.instanced then labels[#labels + 1] = "Outdoor group/elite" end
     if quest.instanced then labels[#labels + 1] = "Dungeon/raid" end
-    if quest.chain == "unknown" then labels[#labels + 1] = "Chain unknown" end
+    if quest.chain == "unknown" then labels[#labels + 1] = "Follow-up data unavailable" end
+    if quest.chain == "unrecorded" then labels[#labels + 1] = "No follow-up recorded (unconfirmed)" end
     if quest.chain == "followup" then
         local count = #quest.followups
         labels[#labels + 1] = count == 1 and "1 recorded follow-up" or (count .. " recorded branches")
@@ -165,8 +166,9 @@ function UI.ShowChainOptions()
     UI.chainSelection = UI.selection
     local quest = UI.selection.quest
     UI.chainTitle:SetText(quest.title)
-    UI.chainStandalone:SetEnabled(quest.chain == "unknown" or quest.chainSource == "your note")
-    UI.chainFinal:SetEnabled(quest.chain == "unknown" or quest.chainSource == "your note")
+    local canMark = addon.Data.ChainUnconfirmed(quest) or quest.chainSource == "your note"
+    UI.chainStandalone:SetEnabled(canMark)
+    UI.chainFinal:SetEnabled(canMark)
     UI.chainClear:SetEnabled(addon.manual.current.chains[quest.id] ~= nil)
     UI.chainOptions:Show()
 end
@@ -343,6 +345,8 @@ function UI.Render(origin)
             row.base:SetColorTexture(active and 0.18 or 0.08, active and 0.24 or 0.11, active and 0.28 or 0.14, 1)
             local markers = (entry.quest.group and not entry.quest.instanced and " [Group]" or "")
                 .. (entry.quest.chain == "unknown" and " [Chain ?]" or "")
+                .. (entry.quest.chain == "unrecorded" and " [No link recorded]" or "")
+                .. (entry.status == "exploration" and " [Exploration ?]" or "")
                 .. (#entry.points == 0 and " [Location ?]" or "")
             row.label:SetText(prefix .. level(entry.quest) .. markers .. "  " .. entry.quest.title .. "  /  " .. entry.text .. suffix)
         end
@@ -355,6 +359,7 @@ function UI.Render(origin)
     if selected then
         local detail = flags(selected.quest)
         local override = selected.override and (" / Manual " .. selected.override) or ""
+        if selected.status == "exploration" then override = override .. " / Exploration unconfirmed" end
         UI.details:SetText(selected.quest.title .. "  /  " .. level(selected.quest) .. "\n" ..
             selected.text .. "\n" .. pointLabel(point, true) .. (point and point.source and (" / " .. point.source) or "") ..
             (detail ~= "" and ("\n" .. detail) or "") .. override)
@@ -368,7 +373,8 @@ function UI.Render(origin)
     UI.exclude:SetEnabled(selected ~= nil)
     UI.auto:SetEnabled(selected and selected.override ~= nil or false)
     UI.map:SetEnabled(point ~= nil)
-    UI.chainButton:SetEnabled(selected and (selected.quest.chain == "unknown" or addon.manual.current.chains[selected.quest.id] ~= nil) or false)
+    UI.chainButton:SetEnabled(selected and (addon.Data.ChainUnconfirmed(selected.quest)
+        or addon.manual.current.chains[selected.quest.id] ~= nil) or false)
     if UI.provider then UI.provider:SetText(addon.Data.status) end
     UI.RefreshPosition(origin or addon.origin)
 end

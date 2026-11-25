@@ -1,8 +1,9 @@
 ## Interface: 16001
-## Title: Questional Efficiency
+## Title: Questionable Efficiency
 ## Notes: Routes the quests already in your Forever quest log.
 ## Version: 0.1.1
-## OptionalDeps: QuestieDB
+## Dependencies: QuestieDB
+## X-License: GPL-3.0-only
 ## SavedVariables: QuestionalEfficiencySettings
 ## SavedVariablesPerCharacter: QuestionalEfficiencyCharacter
 

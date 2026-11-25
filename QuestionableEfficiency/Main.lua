@@ -151,7 +151,7 @@ function addon.Diagnostics()
     local blockedCount = 0
     for _ in pairs(explorationBlocked) do blockedCount = blockedCount + 1 end
     return table.concat({
-        "Questional Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.1.1"),
+        "Questionable Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.1.1"),
         "Client: " .. Client.BuildLabel(),
         "Quest log: " .. tostring(snapshot and snapshot.count or "?") .. " / " .. tostring(snapshot and snapshot.capacity or "?"),
         "Readable quests: " .. tostring(snapshot and #snapshot.quests or 0),
@@ -171,7 +171,7 @@ function addon.Diagnostics()
 end
 
 local function printHelp()
-    print("|cffffcb69Questional Efficiency|r  /qe show • /qe hide • /qe refresh • /qe reset • /qe undo • /qe settings • /qe diagnostics • /qe help")
+    print("|cffffcb69Questionable Efficiency|r  /qe show • /qe hide • /qe refresh • /qe reset • /qe undo • /qe settings • /qe diagnostics • /qe help")
     print("Select a step to view it. Change priorities with Do this next, Skip for now or Exclude. Quest log shows deferred and excluded steps.")
 end
 
@@ -221,8 +221,8 @@ local function onEvent(_, event, first, second)
         if first == name then
             Settings.Init()
             UI.Create()
-            SLASH_QUESTIONALEFFICIENCY1 = "/qe"
-            SlashCmdList.QUESTIONALEFFICIENCY = slash
+            SLASH_QUESTIONABLEEFFICIENCY1 = "/qe"
+            SlashCmdList.QUESTIONABLEEFFICIENCY = slash
         elseif entered and first == "QuestieDB" then
             checkDB()
             startProviderTimer()

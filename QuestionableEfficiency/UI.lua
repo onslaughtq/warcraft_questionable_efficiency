@@ -82,10 +82,10 @@ end
 
 function UI.ShowDiagnostics()
     if not UI.diagnostics then
-        local dialog = panel("QuestionalEfficiencyDiagnostics", 560, 345)
+        local dialog = panel("QuestionableEfficiencyDiagnostics", 560, 345)
         dialog:SetPoint("CENTER", 0, 30)
         dialog:SetFrameStrata("FULLSCREEN_DIALOG")
-        text(dialog, "Questional Efficiency / Diagnostics", 14, -9, 500, 26, "GameFontNormalLarge", gold)
+        text(dialog, "Questionable Efficiency / Diagnostics", 14, -9, 500, 26, "GameFontNormalLarge", gold)
         text(dialog, "Copy with Ctrl+C. Contains build, addon state and aggregate counts.", 14, -38, 530, 20, "GameFontHighlightSmall", muted)
         local scroll = CreateFrame("ScrollFrame", nil, dialog, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 14, -68)
@@ -108,10 +108,10 @@ end
 
 function UI.ShowSettings()
     if not UI.settings then
-        local dialog = panel("QuestionalEfficiencyOptions", 420, 220)
+        local dialog = panel("QuestionableEfficiencyOptions", 420, 220)
         dialog:SetPoint("CENTER", 30, 45)
         dialog:SetFrameStrata("FULLSCREEN_DIALOG")
-        text(dialog, "Questional Efficiency / Settings", 14, -8, 380, 27, "GameFontNormalLarge", gold)
+        text(dialog, "Questionable Efficiency / Settings", 14, -8, 380, 27, "GameFontNormalLarge", gold)
         UI.provider = text(dialog, "", 14, -38, 390, 36, "GameFontHighlightSmall", muted)
         local function checkbox(key, label, y)
             local widget = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
@@ -141,13 +141,13 @@ function UI.ShowSettings()
 end
 
 function UI.ConfirmReset()
-    StaticPopup_Show("QUESTIONAL_EFFICIENCY_RESET")
+    StaticPopup_Show("QUESTIONABLE_EFFICIENCY_RESET")
 end
 
 function UI.ShowChainOptions()
     if not UI.selection then return end
     if not UI.chainOptions then
-        local dialog = panel("QuestionalEfficiencyChainOptions", 436, 161)
+        local dialog = panel("QuestionableEfficiencyChainOptions", 436, 161)
         dialog:SetPoint("CENTER", 20, 40)
         dialog:SetFrameStrata("FULLSCREEN_DIALOG")
         UI.chainTitle = text(dialog, "", 13, -10, 410, 26, "GameFontNormalLarge", gold)
@@ -179,7 +179,7 @@ local function selectTab(tab)
 end
 
 function UI.Create()
-    local frame = panel("QuestionalEfficiencyWindow", width, 538)
+    local frame = panel("QuestionableEfficiencyWindow", width, 538)
     UI.frame = frame
     frame:SetMovable(true)
     addon.Settings.Reanchor(frame)
@@ -194,7 +194,7 @@ function UI.Create()
         addon.Settings.SavePosition(frame)
     end)
 
-    text(drag, "Questional Efficiency", 13, -5, 335, 27, "GameFontNormalLarge", gold)
+    text(drag, "Questionable Efficiency", 13, -5, 335, 27, "GameFontNormalLarge", gold)
     button(frame, "Settings", 402, -7, 79, UI.ShowSettings)
     button(frame, "Hide", 487, -7, 68, function() UI.SetVisible(false) end)
     UI.summary = text(frame, "", 13, -34, 543, 18, "GameFontHighlightSmall", muted)
@@ -255,7 +255,7 @@ function UI.Create()
     end)
     UI.chainButton = button(frame, "Chain note...", 13, -503, 112, UI.ShowChainOptions)
     UI.notice = text(frame, "", 134, -500, 423, 32, "GameFontHighlightSmall", muted)
-    StaticPopupDialogs.QUESTIONAL_EFFICIENCY_RESET = {
+    StaticPopupDialogs.QUESTIONABLE_EFFICIENCY_RESET = {
         text = "Reset to automatic route? This clears your Do this next priority, deferred steps, include/exclude overrides and chain notes.",
         button1 = "Reset", button2 = CANCEL, timeout = 0, whileDead = true, hideOnEscape = true,
         OnAccept = function() addon.ManualAction("reset") end,

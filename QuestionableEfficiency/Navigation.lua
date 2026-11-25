@@ -2,28 +2,28 @@ local _, addon = ...
 local Navigation = { mapStatus = "World map unavailable" }
 addon.Navigation = Navigation
 
-local pinTemplate = "QuestionalEfficiencyRoutePinTemplate"
-QuestionalEfficiencyRoutePinMixin = {}
+local pinTemplate = "QuestionableEfficiencyRoutePinTemplate"
+QuestionableEfficiencyRoutePinMixin = {}
 
-function QuestionalEfficiencyRoutePinMixin:OnAcquired(x, y, label, text, current)
+function QuestionableEfficiencyRoutePinMixin:OnAcquired(x, y, label, text, current)
     self:SetPosition(x, y)
     self.Label:SetText(label)
     self.Fill:SetColorTexture(current and 0.84 or 0.10, current and 0.64 or 0.34, current and 0.20 or 0.43, 1)
     self.title = text
 end
 
-function QuestionalEfficiencyRoutePinMixin:OnMouseEnter()
+function QuestionableEfficiencyRoutePinMixin:OnMouseEnter()
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(self.title, 1, 0.85, 0.4, true)
-    GameTooltip:AddLine("Questional Efficiency", 0.8, 0.8, 0.8)
+    GameTooltip:AddLine("Questionable Efficiency", 0.8, 0.8, 0.8)
     GameTooltip:Show()
 end
 
-function QuestionalEfficiencyRoutePinMixin:OnMouseLeave()
+function QuestionableEfficiencyRoutePinMixin:OnMouseLeave()
     if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
 end
 
-function QuestionalEfficiencyRoutePinMixin:OnReleased()
+function QuestionableEfficiencyRoutePinMixin:OnReleased()
     self:OnMouseLeave()
     MapCanvasPinMixin.OnReleased(self)
 end
@@ -57,9 +57,9 @@ function Navigation.AttachMap()
     if Navigation.provider or Navigation.mapFailed then return end
     local map = WorldMapFrame
     if not (map and map.AddDataProvider and MapCanvasDataProviderMixin and MapCanvasPinMixin) then return end
-    Mixin(QuestionalEfficiencyRoutePinMixin, MapCanvasPinMixin)
+    Mixin(QuestionableEfficiencyRoutePinMixin, MapCanvasPinMixin)
     -- Mixin copies methods, so install the overrides after the Blizzard base.
-    for key, method in pairs(Navigation.pinMethods) do QuestionalEfficiencyRoutePinMixin[key] = method end
+    for key, method in pairs(Navigation.pinMethods) do QuestionableEfficiencyRoutePinMixin[key] = method end
     local provider = CreateFromMixins(MapCanvasDataProviderMixin)
     function provider:RemoveAllData()
         self:GetMap():RemoveAllPinsByTemplate(pinTemplate)
@@ -84,7 +84,7 @@ function Navigation.AttachMap()
 end
 
 Navigation.pinMethods = {}
-for key, method in pairs(QuestionalEfficiencyRoutePinMixin) do Navigation.pinMethods[key] = method end
+for key, method in pairs(QuestionableEfficiencyRoutePinMixin) do Navigation.pinMethods[key] = method end
 
 function Navigation.Update(steps, byKey)
     Navigation.steps = steps

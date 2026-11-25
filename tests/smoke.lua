@@ -47,8 +47,8 @@ C_QuestLog = {
     IsComplete = function(id) return completed[id] or false end,
 }
 local addon = {}
-local name = "QuestionalEfficiency"
-local path = "QuestionalEfficiency/"
+local name = "QuestionableEfficiency"
+local path = "QuestionableEfficiency/"
 for file in io.lines(path .. name .. "_Forever.toc") do
     if file:match("%.lua$") then assert(loadfile(path .. file))(name, addon) end
 end
@@ -111,8 +111,8 @@ event("QUEST_REMOVED", 10)
 assert(not addon.plan.full and addon.notice:find("slot opened", 1, true))
 assert(addon.plan.steps[1].quest.id == 11)
 assert(not addon.plan.byId[10])
-SlashCmdList.QUESTIONALEFFICIENCY("hide")
+SlashCmdList.QUESTIONABLEEFFICIENCY("hide")
 assert(not addon.UI.frame:IsShown())
-SlashCmdList.QUESTIONALEFFICIENCY("show")
+SlashCmdList.QUESTIONABLEEFFICIENCY("show")
 assert(addon.UI.frame:IsShown())
 print("PASS TOC loads, window startup, stable navigation tick, clicks, progress, full-log and exploration events, and slash commands")

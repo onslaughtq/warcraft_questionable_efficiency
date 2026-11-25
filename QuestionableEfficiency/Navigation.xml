@@ -1,6 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Frame name="QuestionalEfficiencyRoutePinTemplate" virtual="true" hidden="true"
-           enableMouseMotion="true" mixin="QuestionalEfficiencyRoutePinMixin">
+    <Frame name="QuestionableEfficiencyRoutePinTemplate" virtual="true" hidden="true"
+           enableMouseMotion="true" mixin="QuestionableEfficiencyRoutePinMixin">
         <Size x="20" y="20"/>
         <Layers>
             <Layer level="BACKGROUND">

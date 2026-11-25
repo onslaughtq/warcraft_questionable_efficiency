@@ -1,15 +1,21 @@
-# Questional Efficiency
+# Questionable Efficiency
 
-Questional Efficiency routes quests already in your World of Warcraft: Forever quest log. It sorts by quest level, then favors shorter straight-line legs among objectives at the same level. When the log is full, it looks for a practical way to free one slot.
+**This project is 100% vibe-coded and requires QuestieDB for World of Warcraft: Forever.**
+
+Questionable Efficiency routes quests already in your World of Warcraft: Forever quest log. It sorts by quest level, then favors shorter straight-line legs among objectives at the same level. When the log is full, it looks for a practical way to free one slot.
 
 ## Install or update
 
 1. Exit World of Warcraft. In Battle.net, select **World of Warcraft: Forever** and use the gear menu's **Show in Explorer** to find the install. Use the live `_forever_\Interface\AddOns` directory. On the verified machine it is `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`.
-2. Copy the repository's [QuestionalEfficiency](QuestionalEfficiency/) folder into **AddOns**, keeping the folder name exact. The result should contain `AddOns\QuestionalEfficiency\QuestionalEfficiency_Forever.toc` directly. Copy that same source folder's contents into the installed QuestionalEfficiency folder for updates. Leave `WTF` in place to retain your settings.
-3. For coordinates, database levels, finishers and chain data, install the packaged [QuestieDB Forever release](https://github.com/Questie/QuestieDB/releases/latest). The single-flavor **Forever** ZIP and the release's recommended **all** ZIP both work. Extract the `QuestieDB` folder next to `QuestionalEfficiency`. Verify that it contains `QuestieDB_Forever.toc`. If you already have the correct version, keep it. Update QuestieDB with the maintainer's packaged addon instructions.
-4. Start Forever and enable **Questional Efficiency** and **QuestieDB** in the character-select **AddOns** list. Log in and type `/qe show`.
+2. Copy the repository's [QuestionableEfficiency](QuestionableEfficiency/) folder into **AddOns**, keeping the folder name exact. The result should contain `AddOns\QuestionableEfficiency\QuestionableEfficiency_Forever.toc` directly. Copy that same source folder's contents into the installed QuestionableEfficiency folder for updates. Leave `WTF` in place to retain your settings.
+3. Install the required [QuestieDB Forever release](https://github.com/Questie/QuestieDB/releases/latest). The single-flavor **Forever** ZIP and the release's recommended **all** ZIP both work. Extract the `QuestieDB` folder next to `QuestionableEfficiency`. Verify that it contains `QuestieDB_Forever.toc`. If you already have the correct version, keep it. Update QuestieDB with the maintainer's packaged addon instructions.
+4. Start Forever and enable **Questionable Efficiency** and **QuestieDB** in the character-select **AddOns** list. Log in and type `/qe show`.
 
-The base addon has no hard dependencies. QuestieDB supplies location and chain data, and its provider API works without Questie enabled. The route remains readable with client levels, objective progress and classification if QuestieDB is absent or loading. World-map markers and the arrow use Blizzard UI APIs. The installed files run inside WoW without network services, API keys or a companion app.
+### Upgrading from Questional Efficiency
+
+With WoW closed, move the old `QuestionalEfficiency` folder out of **AddOns** before installing `QuestionableEfficiency`. To keep your settings, copy each `QuestionalEfficiency.lua` in the Forever installation's `WTF\Account` SavedVariables folders to `QuestionableEfficiency.lua` in the same folder. This applies to both account-wide and per-character SavedVariables. Keep any `QuestionableEfficiency.lua` that already exists. Enable the renamed addon at character selection.
+
+QuestieDB supplies quest levels, coordinates, turn-in locations and chain data. Questie can stay disabled. World-map markers and the arrow use Blizzard UI APIs. The installed files run inside WoW without network services, API keys or a companion app.
 
 ## Commands and controls
 
@@ -54,3 +60,7 @@ Technical references used for this build
 - [Forever Blizzard map API documentation](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_APIDocumentationGenerated/MapDocumentation.lua) and [Blizzard MapCanvas source](https://github.com/Gethe/wow-ui-source/tree/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_MapCanvas).
 - [Forever's Blizzard map exploration API](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_APIDocumentationGenerated/MapExplorationDocumentation.lua) and [Blizzard's use of exploration IDs at a map position](https://github.com/Gethe/wow-ui-source/blob/c01a87b549bbc19e0f284c1616d18654c91297de/Interface/AddOns/Blizzard_FrameXMLUtil/Mainline/MapUtil.lua).
 - [QuestieDB 1.1.6 public API](https://github.com/Questie/QuestieDB/blob/v1.1.6/docs/api.md), [Forever data notes](https://github.com/Questie/QuestieDB/blob/v1.1.6/docs/forever.md), and [1.1.6 release](https://github.com/Questie/QuestieDB/releases/tag/v1.1.6).
+
+## License
+
+Questionable Efficiency is licensed under the GNU General Public License, version 3 only (GPL-3.0-only). See [LICENSE](LICENSE) for the full text.

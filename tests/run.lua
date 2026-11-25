@@ -1,8 +1,8 @@
 -- Run from the repository root with Lua 5.1.
-local root = "QuestionalEfficiency/"
+local root = "QuestionableEfficiency/"
 local addon = {}
 for _, module in ipairs({ "Client", "QuestData", "Route", "Settings" }) do
-    assert(loadfile(root .. module .. ".lua"))("QuestionalEfficiency", addon)
+    assert(loadfile(root .. module .. ".lua"))("QuestionableEfficiency", addon)
 end
 
 local Route, Settings, Client, Data = addon.Route, addon.Settings, addon.Client, addon.Data
@@ -304,7 +304,7 @@ test("client snapshot includes unwatched/collapsed-header quests and uses report
     eq(log.quests[1].objectives[1].text, "Wolf 1/5")
 end)
 
-test("optional DB resolves alternative spawns and turn-ins without moving unmatched objectives", function()
+test("QuestieDB resolves alternative spawns and turn-ins without moving unmatched objectives", function()
     C_AddOns = { GetAddOnMetadata = function(_, field) return field == "X-Flavor" and "Forever" or "test" end }
     CreateVector2D = function(x, y) return { GetXY = function() return x, y end } end
     C_Map = {

@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Questional Efficiency
+## Notes: Routes the quests already in your Forever quest log.
+## Version: 0.1.0
+## OptionalDeps: QuestieDB
+## SavedVariables: QuestionalEfficiencySettings
+## SavedVariablesPerCharacter: QuestionalEfficiencyCharacter
+
+Client.lua
+QuestData.lua
+Route.lua
+Settings.lua
+Navigation.lua
+Navigation.xml
+UI.lua
+Main.lua

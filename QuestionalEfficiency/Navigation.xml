@@ -1,0 +1,24 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="QuestionalEfficiencyRoutePinTemplate" virtual="true" hidden="true"
+           enableMouseMotion="true" mixin="QuestionalEfficiencyRoutePinMixin">
+        <Size x="20" y="20"/>
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture parentKey="Border" setAllPoints="true">
+                    <Color r="0.07" g="0.08" b="0.1" a="1"/>
+                </Texture>
+            </Layer>
+            <Layer level="ARTWORK">
+                <Texture parentKey="Fill">
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="2" y="-2"/>
+                        <Anchor point="BOTTOMRIGHT" x="-2" y="2"/>
+                    </Anchors>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString parentKey="Label" inherits="GameFontHighlightSmall" justifyH="CENTER" setAllPoints="true"/>
+            </Layer>
+        </Layers>
+    </Frame>
+</Ui>

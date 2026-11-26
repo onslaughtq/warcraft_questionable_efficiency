@@ -3,7 +3,7 @@ set -eu
 
 addon=QuestionableEfficiency
 addon_dir=$(realpath "$addon")
-manifest="$addon"_Forever.toc
+manifest="$addon.toc"
 output=$1
 staging=$(mktemp -d "$output/.package.XXXXXX")
 trap 'rm -rf -- "$staging"' EXIT

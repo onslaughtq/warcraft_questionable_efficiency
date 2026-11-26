@@ -6,8 +6,14 @@ local methods = {
     EnableMouse = noop, EnableMouseWheel = noop, SetAllPoints = noop, SetFontObject = noop,
     SetAutoFocus = noop, SetJustifyH = noop, SetJustifyV = noop, SetTextColor = noop, SetColorTexture = noop,
     SetMovable = noop, RegisterForDrag = noop, SetHighlightTexture = noop, SetWordWrap = noop,
+    RegisterForClicks = noop, SetTexture = noop, SetTexCoord = noop, SetFrameLevel = noop,
+    GetFrameLevel = function() return 0 end,
     SetThickness = noop, SetWidth = noop, SetMultiLine = noop, SetScrollChild = noop, SetFocus = noop, HighlightText = noop,
     SetText = function(self, label) self.label = label end,
+    GetText = function(self) return self.label end,
+    ClearFocus = noop,
+    SetChecked = function(self, checked) self.checked = checked end,
+    GetChecked = function(self) return self.checked end,
     SetScript = function(self, name, fn) self[name] = fn end,
     RegisterEvent = function(self, name) callbacks[name] = self.OnEvent end,
     SetEnabled = function(self, enabled) self.enabled = enabled end,
@@ -18,7 +24,7 @@ local methods = {
     SetStartPoint = function(_, anch, parent, x, y) assert(anch == "CENTER" and parent and x and y) end,
     SetEndPoint = function(_, anch, parent, x, y) assert(anch == "CENTER" and parent and x and y) end,
 }
-function CreateFrame() return setmetatable({ shown = true }, { __index = methods }) end
+function CreateFrame(_, _, parent) return setmetatable({ shown = true, parent = parent }, { __index = methods }) end
 methods.CreateTexture, methods.CreateFontString, methods.CreateLine = CreateFrame, CreateFrame, CreateFrame
 function GetBuildInfo() return "1.60.1", "71091", "", 16001 end
 CreateVector2D = function(x, y) return { GetXY = function() return x, y end } end
@@ -49,7 +55,7 @@ C_QuestLog = {
 local addon = {}
 local name = "QuestionableEfficiency"
 local path = "QuestionableEfficiency/"
-for file in io.lines(path .. name .. "_Forever.toc") do
+for file in io.lines(path .. name .. ".toc") do
     if file:match("%.lua$") then assert(loadfile(path .. file))(name, addon) end
 end
 
@@ -65,9 +71,18 @@ QuestionableEfficiencyCharacter = { chains = { [11] = "final" } }
 event("ADDON_LOADED", name)
 assert(addon.preferences.pins == false)
 assert(addon.manual.current.chains[11] == "final")
+Minimap = CreateFrame()
 event("PLAYER_ENTERING_WORLD")
 assert(addon.plan.steps[1].quest.id == 10)
 assert(addon.UI.frame:IsShown())
+local launcher = assert(addon.UI.minimapButton)
+assert(launcher.parent == Minimap)
+launcher:OnClick()
+assert(not addon.UI.frame:IsShown() and launcher:IsShown() and not addon.preferences.visible)
+launcher:OnClick()
+assert(addon.UI.frame:IsShown() and addon.preferences.visible)
+event("PLAYER_ENTERING_WORLD")
+assert(addon.UI.minimapButton == launcher)
 assert(addon.Diagnostics():find("QuestieDB unavailable", 1, true))
 local first = addon.plan.steps[1]
 first.point = { x = .65, y = .25, map = 17, space = 1, wx = 650, wy = 750 }
@@ -119,4 +134,30 @@ SlashCmdList.QUESTIONABLEEFFICIENCY("hide")
 assert(not addon.UI.frame:IsShown())
 SlashCmdList.QUESTIONABLEEFFICIENCY("show")
 assert(addon.UI.frame:IsShown())
-print("PASS TOC loads, window startup, stable navigation tick, clicks, progress, full-log and exploration events, and slash commands")
+SlashCmdList.QUESTIONABLEEFFICIENCY("settings")
+assert(addon.UI.dungeonSlots:GetText() == "5")
+Enum = { QuestTag = { Dungeon = 81 } }
+C_QuestLog.GetQuestTagInfo = function() return { tagID = 81 } end
+event("QUEST_LOG_UPDATE")
+assert(#addon.plan.steps == 0)
+addon.UI.dungeonCheck:SetChecked(true)
+addon.UI.dungeonCheck:OnClick()
+assert(QuestionableEfficiencySettings.includeDungeons and addon.plan.steps[1].quest.id == 11)
+addon.UI.prepCheck:SetChecked(true)
+addon.UI.prepCheck:OnClick()
+assert(addon.plan.slotMode == "prep" and addon.plan.openSlots == 2 and #addon.plan.steps == 0)
+assert(addon.UI.summary.label:find("2 open / 3 target", 1, true))
+IsInInstance = function() return true, "party" end
+event("PLAYER_ENTERING_WORLD")
+assert(addon.plan.slotMode == nil and addon.plan.steps[1].quest.id == 11)
+IsInInstance = function() return false, "none" end
+event("PLAYER_ENTERING_WORLD")
+assert(addon.plan.slotMode == "prep")
+addon.UI.dungeonSlots:SetText("1.5")
+addon.UI.dungeonSlots:OnEnterPressed()
+assert(QuestionableEfficiencySettings.dungeonSlots == 5)
+addon.UI.dungeonSlots:SetText("2")
+addon.UI.dungeonSlots:OnEnterPressed()
+assert(QuestionableEfficiencySettings.dungeonSlots == 2 and addon.plan.slotMode == nil)
+assert(addon.notice:find("target met", 1, true) and addon.plan.steps[1].quest.id == 11)
+print("PASS TOC startup, minimap launcher, navigation, quest events, dungeon settings, and slash commands")

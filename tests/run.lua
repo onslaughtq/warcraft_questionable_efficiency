@@ -56,8 +56,8 @@ test("strict ascending levels; known levels precede unknowns and same-level trav
 end)
 
 test("dungeon and raid exclusion, outdoor groups, and both manual overrides", function()
-    local dungeon = quest(1, 5, { instanced = "Dungeon tag" })
-    local raid = quest(2, 5, { instanced = "Raid tag" })
+    local dungeon = quest(1, 5, { instanced = "Dungeon tag", instanceKind = "dungeon" })
+    local raid = quest(2, 5, { instanced = "Raid tag", instanceKind = "raid" })
     local group = quest(3, 5, { group = true })
     local log = snapshot({ dungeon, raid, group })
     local state = Settings.New()
@@ -65,11 +65,57 @@ test("dungeon and raid exclusion, outdoor groups, and both manual overrides", fu
     eq(plan.steps[1].quest.id, 3)
     eq(#plan.steps, 1)
     eq(plan.status["1:1"], "excluded")
+    local preferences = { includeDungeons = true }
+    plan = Route.Build(log, state.current, nil, nil, nil, preferences)
+    eq(plan.steps[1].quest.id, 1)
+    eq(#plan.steps, 2)
+    eq(plan.status["2:1"], "excluded")
+    Settings.Apply(state, "exclude", nil, dungeon)
+    plan = Route.Build(log, state.current, nil, nil, nil, preferences)
+    eq(plan.steps[1].quest.id, 3)
     Settings.Apply(state, "include", nil, dungeon)
     Settings.Apply(state, "exclude", nil, group)
     plan = Route.Build(log, state.current)
     eq(plan.steps[1].quest.id, 1)
     eq(#plan.steps, 1)
+end)
+
+test("dungeon prep frees outdoor slots to the target and pauses inside a dungeon", function()
+    local inside = point(5)
+    inside.instanced = "dungeon"
+    local preferences = { includeDungeons = true, prepareForDungeon = true, dungeonSlots = 5 }
+    local dungeon = quest(1, 5, { instanced = "Dungeon tag", instanceKind = "dungeon",
+        objectives = { step(1, inside) }, turnin = { points = { point(10) } } })
+    local ready = quest(2, 10, { complete = true, turnin = { points = { inside, point(100) } } })
+    local indoorTurnin = quest(3, 12, { complete = true, instanced = "Dungeon tag", instanceKind = "dungeon",
+        turnin = { points = { inside } } })
+    local log = snapshot({ dungeon, ready, indoorTurnin }, 8, 10)
+    local state = manual()
+    local plan = Route.Build(log, state, point(0), nil, nil, preferences)
+    eq(plan.slotMode, "prep")
+    eq(plan.openSlots, 2)
+    eq(plan.slotTarget, 5)
+    eq(#plan.steps, 1)
+    eq(plan.steps[1].key, "2:turnin")
+    eq(plan.steps[1].point.wx, 100)
+    eq(plan.status["3:turnin"], "exploration")
+    log.count, log.quests = 7, { dungeon, indoorTurnin }
+    plan = Route.Build(log, state, point(0), plan, nil, preferences)
+    eq(plan.slotMode, "prep")
+    eq(#plan.steps, 0)
+    log.inDungeonOrRaid = true
+    plan = Route.Build(log, state, point(0), plan, nil, preferences)
+    eq(plan.slotMode, nil)
+    eq(plan.steps[1].quest.id, 1)
+    log.inDungeonOrRaid, log.count = false, 5
+    plan = Route.Build(log, state, point(0), plan, nil, preferences)
+    eq(plan.slotMode, nil)
+    eq(plan.openSlots, 5)
+    eq(plan.steps[1].quest.id, 1)
+    log.count, preferences.dungeonSlots = 10, 0
+    eq(Route.Build(log, state, point(0), plan, nil, preferences).slotMode, "full")
+    log.count = nil
+    eq(Route.Build(log, state, point(0), plan, nil, preferences).slotMode, nil)
 end)
 
 test("unfinished objectives only, then confirmed turn-in; failed quests stay inspectable", function()
@@ -293,8 +339,10 @@ test("client snapshot includes unwatched/collapsed-header quests and uses report
     eq(log.quests[1].group, true)
     eq(log.quests[1].objectives[1].remaining, 4)
     eq(log.quests[2].instanced, "Dungeon tag from client")
+    eq(log.quests[2].instanceKind, "dungeon")
     eq(log.quests[2].complete, true)
     eq(log.quests[3].instanced, "Raid tag from client")
+    eq(log.quests[3].instanceKind, "raid")
     C_QuestLog.GetQuestObjectives = function(id)
         if id == 5 then return { { text = "0/5", type = "monster", finished = false } } end
     end
@@ -339,6 +387,18 @@ test("QuestieDB resolves alternative spawns and turn-ins without moving unmatche
     eq(record.turnin.points[1].source, "Ranger")
     local plan = Route.Build(log, manual(), { map = 18, x = 0, y = 0, space = 18, wx = 0, wy = 0 })
     eq(plan.steps[1].point.map, 18)
+
+    Enum.UIMapType = { Dungeon = 4 }
+    C_Map.GetMapInfo = function(id) return { name = "Instance " .. id, mapType = 4 } end
+    C_EncounterJournal = { GetInstanceForGameMap = function(id) return id end }
+    EJ_GetInstanceInfo = function(id)
+        return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, id == 18
+    end
+    Data.ResetLocations()
+    eq(Data.Enrich(log), 0)
+    eq(record.instanceKind, "raid")
+    eq(record.turnin.points[1].instanced, "dungeon")
+    eq(#Route.Build(log, manual(), nil, nil, nil, { includeDungeons = true }).steps, 0)
 end)
 
 print(("%d tests passed"):format(passed))

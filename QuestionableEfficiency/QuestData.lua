@@ -154,7 +154,13 @@ function Data.Chain(id, quests, provenance)
 end
 
 local function collector()
-    return { points = {}, seen = {}, hasInstance = false, uncertain = false }
+    return { points = {}, seen = {}, uncertain = false }
+end
+
+local function mergeInstanceKinds(a, b)
+    if a == "raid" or b == "raid" then return "raid" end
+    if a == "instance" or b == "instance" then return "instance" end
+    return a or b
 end
 
 local function addSpawns(result, spawns, label)
@@ -166,12 +172,12 @@ local function addSpawns(result, spawns, label)
             Data.mapNames[mapID] = Client.MapName(mapID) or false
         end
         local zone = mapID and Data.mapNames[mapID]
-        if mapID and Data.instanceMaps[mapID] == nil then Data.instanceMaps[mapID] = Client.IsDungeonMap(mapID) end
+        if mapID and Data.instanceMaps[mapID] == nil then Data.instanceMaps[mapID] = Client.InstanceMapKind(mapID) end
         if #points == 0 then result.uncertain = true end
         for _, xy in ipairs(points) do
             local x, y = xy[1], xy[2]
             local instanced = mapID and (x == -1 and y == -1 or zone) and Data.instanceMaps[mapID]
-            if instanced then result.hasInstance = true end
+            if instanced then result.instanceKind = mergeInstanceKinds(result.instanceKind, instanced) end
             if zone and type(x) == "number" and type(y) == "number" and x >= 0 and y >= 0 and x <= 100 and y <= 100 then
                 local key = mapID .. ":" .. x .. ":" .. y
                 if not result.seen[key] then
@@ -213,7 +219,7 @@ local function addItem(result, db, id, visited)
 end
 
 local function instanceOnly(result)
-    return result.hasInstance and not result.hasOutdoorAlternative and not result.uncertain
+    return not result.hasOutdoorAlternative and not result.uncertain and result.instanceKind or nil
 end
 
 local function addCandidate(candidates, kind, data, name)
@@ -313,14 +319,20 @@ local function locations(db, quest)
     addEntities(turnin, db.Npc, finisher[1])
     addEntities(turnin, db.Object, finisher[2])
     quest.turnin = { text = "Turn in quest", points = turnin.points }
-    if instanceOnly(turnin) then quest.instanced = quest.instanced or "QuestieDB turn-in lies inside a client-listed dungeon or raid" end
+    local instanceKind = instanceOnly(turnin)
+    local instanceReason = instanceKind and "QuestieDB turn-in lies inside a client-listed dungeon or raid"
     local matches = matchObjectives(quest.objectives, candidatesFor(db, quest.id))
     for _, objective in ipairs(quest.objectives) do
         local result = objectivePoints(db, matches[objective])
         objective.points = result.points
-        if instanceOnly(result) then
-            quest.instanced = quest.instanced or "QuestieDB objective lies inside a client-listed dungeon or raid"
+        local objectiveKind = instanceOnly(result)
+        if objectiveKind then
+            instanceKind = mergeInstanceKinds(instanceKind, objectiveKind)
+            instanceReason = instanceReason or "QuestieDB objective lies inside a client-listed dungeon or raid"
         end
+    end
+    if not quest.instanced and instanceKind then
+        quest.instanced, quest.instanceKind = instanceReason, instanceKind
     end
 end
 

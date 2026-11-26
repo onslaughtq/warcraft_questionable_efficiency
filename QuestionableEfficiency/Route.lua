@@ -153,14 +153,14 @@ local function finishCost(tasks, quest, origin, finishers)
     return travel + work + chainCost + (quest.complete and 0 or 3200)
 end
 
-local function fullCandidates(eligible, tasks, isExplored)
+local function fullCandidates(eligible, tasks, isExplored, preparing)
     local groups, deferred, blocked, finishers, cache = {}, {}, {}, {}, {}
     local function exploredPoints(points)
         local known = {}
         for _, point in ipairs(points or {}) do
             local key = point.map .. ":" .. point.x .. ":" .. point.y
             if cache[key] == nil then cache[key] = isExplored and isExplored(point) == true or false end
-            if cache[key] then known[#known + 1] = point end
+            if cache[key] and (not preparing or not point.instanced) then known[#known + 1] = point end
         end
         return known
     end
@@ -172,7 +172,7 @@ local function fullCandidates(eligible, tasks, isExplored)
     end
     for id, steps in pairs(groups) do
         local quest = steps[1].quest
-        if deferred[id] then
+        if deferred[id] or (preparing and quest.instanced and not quest.complete) then
             groups[id] = nil
         else
             for _, task in ipairs(steps) do
@@ -204,28 +204,34 @@ local function fullGoal(groups, finishers, origin, previous)
     return best and best.id
 end
 
-local function fullReason(task)
+local function fullReason(task, prefix)
     local quest = task.quest
     local action = quest.complete and "turn in this" or "finish and turn in this"
     if quest.chain == "standalone" then
-        return "Quest log full: " .. action .. " standalone quest to free a slot (" .. (quest.chainSource or "QuestieDB") .. ")."
+        return prefix .. action .. " standalone quest to free a slot (" .. (quest.chainSource or "QuestieDB") .. ")."
     elseif quest.chain == "final" then
-        return "Quest log full: " .. action .. " chain ending to free a slot (" .. (quest.chainSource or "QuestieDB") .. ")."
+        return prefix .. action .. " chain ending to free a slot (" .. (quest.chainSource or "QuestieDB") .. ")."
     elseif quest.chain == "followup" then
-        return "Quest log full: " .. action .. " quest and defer any offered follow-up to keep the slot open."
+        return prefix .. action .. " quest and defer any offered follow-up to keep the slot open."
     elseif quest.chain == "unrecorded" then
-        return "Quest log full: " .. action .. " quest to free a slot. QuestieDB records no follow-up, but one may exist."
+        return prefix .. action .. " quest to free a slot. QuestieDB records no follow-up, but one may exist."
     end
-    return "Quest log full: " .. action .. " quest to free a slot. Follow-up status is unknown."
+    return prefix .. action .. " quest to free a slot. Follow-up status is unknown."
 end
 
-function Route.Build(snapshot, manual, origin, previous, force)
+function Route.IsExcluded(quest, override, includeDungeons)
+    return override == "exclude" or (override ~= "include" and quest.instanced
+        and not (includeDungeons and quest.instanceKind == "dungeon"))
+end
+
+function Route.Build(snapshot, manual, origin, previous, force, preferences)
+    preferences = preferences or {}
     local all, byKey, byId = Route.Tasks(snapshot.quests)
     local pool, eligible, permitted, status = {}, {}, {}, {}
     for _, task in ipairs(all) do
         local id = task.quest.id
         local override = manual.overrides[id]
-        if override == "exclude" or (override ~= "include" and task.quest.instanced) then
+        if Route.IsExcluded(task.quest, override, preferences.includeDungeons) then
             status[task.key] = "excluded"
         else
             permitted[#permitted + 1] = task
@@ -237,18 +243,24 @@ function Route.Build(snapshot, manual, origin, previous, force)
         end
     end
 
-    local full = snapshot.capacity and snapshot.count and snapshot.count >= snapshot.capacity or false
-    local sameMode = previous and previous.full == full and not force
+    local openSlots = snapshot.capacity and snapshot.count and math.max(0, snapshot.capacity - snapshot.count)
+    local slotTarget = preferences.prepareForDungeon and not snapshot.inDungeonOrRaid and snapshot.capacity
+        and math.min(preferences.dungeonSlots, snapshot.capacity) or nil
+    local full = openSlots == 0
+    local preparing = openSlots and slotTarget and openSlots < slotTarget
+    local slotMode = preparing and "prep" or (full and "full" or nil)
+    local prefix = preparing and "Dungeon prep: " or "Quest log full: "
+    local sameMode = previous and previous.slotMode == slotMode and not force
     local held = sameMode and previous.steps[1] or nil
     local steps, current, purpose = {}
     local goal, groups, blocked
-    if full then
+    if slotMode then
         local finishers
-        groups, finishers, blocked = fullCandidates(eligible, permitted, snapshot.isExplored)
+        groups, finishers, blocked = fullCandidates(eligible, permitted, snapshot.isExplored, preparing)
         goal = fullGoal(groups, finishers, origin, held and eligible[held.key] and previous.goal)
     end
     current = takeKey(pool, origin, manual.next, held)
-    if full then
+    if slotMode then
         local automatic = {}
         for _, task in ipairs(pool) do
             if groups[task.quest.id] then
@@ -261,14 +273,15 @@ function Route.Build(snapshot, manual, origin, previous, force)
     end
     if current then
         purpose = "Manual priority: Do this next."
-        if full and blocked[current.quest.id] then
-            purpose = purpose .. " Exploration is unconfirmed for one or more stops."
-        elseif full and groups[current.quest.id] then
-            purpose = purpose .. " " .. fullReason(current)
+        if slotMode and blocked[current.quest.id] then
+            purpose = purpose .. (preparing and " An explored outdoor route is unavailable."
+                or " Exploration is unconfirmed for one or more stops.")
+        elseif slotMode and groups[current.quest.id] then
+            purpose = purpose .. " " .. fullReason(current, prefix)
         end
     elseif #pool > 0 then
         if held and eligible[held.key] then
-            if full and goal and held.quest.id == goal then
+            if goal and held.quest.id == goal then
                 current = takeKey(pool, origin, held.key, held)
             elseif not goal then
                 local canHold = true
@@ -280,12 +293,14 @@ function Route.Build(snapshot, manual, origin, previous, force)
         end
         current = current or takeNearest(pool, origin, not goal, goal)
         if goal then
-            purpose = fullReason(current)
+            purpose = fullReason(current, prefix)
         elseif current.quest.level then
             purpose = "Lowest quest level first. Same-level steps use estimated straight-line distance where available."
         else
             purpose = "Quest level unknown. Known quest levels come first."
         end
+    elseif preparing then
+        purpose = "Dungeon prep: no eligible quest has a complete route through explored outdoor stops. See Quest log."
     elseif full then
         purpose = "Quest log full: no eligible quest has a complete route through confirmed explored stops. See Quest log."
     else
@@ -301,6 +316,6 @@ function Route.Build(snapshot, manual, origin, previous, force)
         nextTask = nextTask or takeNearest(pool, from, true)
         steps[#steps + 1], from = nextTask, nextTask.point or from
     end
-    return { full = full, goal = goal, steps = steps, all = all, byKey = byKey, byId = byId,
-        status = status, reason = purpose }
+    return { full = full, slotMode = slotMode, openSlots = openSlots, slotTarget = slotTarget,
+        goal = goal, steps = steps, all = all, byKey = byKey, byId = byId, status = status, reason = purpose }
 end

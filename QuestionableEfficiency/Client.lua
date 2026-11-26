@@ -30,10 +30,10 @@ local function classification(api, id, info)
     local tags = Enum and Enum.QuestTag or {}
     local tagID = readable(tag, "table") and positive(tag.tagID) or nil
     if tagID and (tagID == tags.Raid or tagID == tags.Raid10 or tagID == tags.Raid25) then
-        return "Raid tag from client"
+        return "Raid tag from client", false, "raid"
     end
     if tagID and (tagID == tags.Dungeon or tagID == tags.Heroic) then
-        return "Dungeon tag from client"
+        return "Dungeon tag from client", false, "dungeon"
     end
     local group = (tagID and tagID == tags.Group)
         or (positive(info.suggestedGroup) or 0) > 1
@@ -98,7 +98,9 @@ function Client.ReadLog()
     local entries, count = call(api.GetNumQuestLogEntries)
     local capacity = positive(call(api.GetMaxNumQuestsCanAccept))
         or positive(Constants and Constants.QuestLogConsts and Constants.QuestLogConsts.MAXIMUM_NUM_QUESTS_LOG_CAN_ACCEPT)
-    local snapshot = { quests = {}, capacity = capacity }
+    local _, instanceType = call(IsInInstance)
+    local inDungeonOrRaid = readable(instanceType, "string") and (instanceType == "party" or instanceType == "raid")
+    local snapshot = { quests = {}, capacity = capacity, inDungeonOrRaid = inDungeonOrRaid }
     if not readable(entries, "number") or type(api.GetInfo) ~= "function" then
         snapshot.warning = "Quest log unavailable. Leave restricted content or try /qe refresh."
         return snapshot
@@ -113,13 +115,13 @@ function Client.ReadLog()
                 seen[id] = true
                 local failed = flag(call(api.IsFailed, id))
                 local complete = not failed and (flag(call(api.ReadyForTurnIn, id)) or flag(call(api.IsComplete, id)))
-                local instanced, group = classification(api, id, info)
+                local instanced, group, instanceKind = classification(api, id, info)
                 local objectives, pending = questObjectives(api, id, complete, failed)
                 snapshot.quests[#snapshot.quests + 1] = {
                     id = id,
                     title = readable(info.title, "string") and info.title ~= "" and info.title or ("Quest #" .. id),
                     clientLevel = positive(info.level), scaling = flag(info.isScaling),
-                    complete = complete, failed = failed, instanced = instanced, group = group,
+                    complete = complete, failed = failed, instanced = instanced, instanceKind = instanceKind, group = group,
                     objectives = objectives, progressPending = pending,
                 }
             end
@@ -151,7 +153,11 @@ local function vectorXY(vector)
     end
 end
 
-function Client.IsDungeonMap(mapID)
+local function journalRaidFlag(instanceID)
+    return select(12, EJ_GetInstanceInfo(instanceID))
+end
+
+function Client.InstanceMapKind(mapID)
     local journal = C_EncounterJournal
     local dungeon = Enum and Enum.UIMapType and Enum.UIMapType.Dungeon
     if not (journal and journal.GetInstanceForGameMap and dungeon and C_Map) then return false end
@@ -159,7 +165,11 @@ function Client.IsDungeonMap(mapID)
     if not readable(map, "table") or not readable(map.mapType, "number") or map.mapType ~= dungeon then return false end
     local center = Client.Point(mapID, 0.5, 0.5)
     -- Encounter Journal takes the underlying game map ID, not the UI map ID.
-    return center.space and positive(call(journal.GetInstanceForGameMap, center.space)) ~= nil or false
+    local instanceID = center.space and positive(call(journal.GetInstanceForGameMap, center.space))
+    if not instanceID then return false end
+    local isRaid = call(journalRaidFlag, instanceID)
+    if not readable(isRaid, "boolean") then return "instance" end
+    return isRaid and "raid" or "dungeon"
 end
 
 function Client.Point(mapID, x, y, zone)

@@ -4,14 +4,14 @@
 
 **This project is 100% vibe-coded and requires QuestieDB for World of Warcraft: Forever.**
 
-Questionable Efficiency routes quests already in your World of Warcraft: Forever quest log. It sorts by quest level, then favors shorter straight-line legs among objectives at the same level. When the log is full, it looks for a practical way to free one slot.
+Questionable Efficiency routes quests already in your World of Warcraft: Forever quest log. It sorts by quest level, then favors shorter straight-line legs among objectives at the same level. When the log is full, it looks for a practical way to free a slot. Dungeon prep can help you make room for new and shared quests before you enter an instance.
 
 ## Install or update
 
 1. Exit World of Warcraft. In Battle.net, select **World of Warcraft: Forever** and use the gear menu's **Show in Explorer** to find the install. Use the live `_forever_\Interface\AddOns` directory. On the verified machine it is `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`.
-2. Copy the repository's [QuestionableEfficiency](QuestionableEfficiency/) folder into **AddOns**, keeping the folder name exact. The result should contain `AddOns\QuestionableEfficiency\QuestionableEfficiency_Forever.toc` directly. Copy that same source folder's contents into the installed QuestionableEfficiency folder for updates. Leave `WTF` in place to retain your settings.
+2. Copy the repository's [QuestionableEfficiency](QuestionableEfficiency/) folder into **AddOns**, keeping the folder name exact. The result should contain `AddOns\QuestionableEfficiency\QuestionableEfficiency.toc` directly. Copy that same source folder's contents into the installed QuestionableEfficiency folder for updates. If the installed folder still contains `QuestionableEfficiency_Forever.toc` from an older version, remove that file so WoW uses the new manifest. Leave `WTF` in place to retain your settings.
 3. Install the required [QuestieDB Forever release](https://github.com/Questie/QuestieDB/releases/latest). The single-flavor **Forever** ZIP and the release's recommended **all** ZIP both work. Extract the `QuestieDB` folder next to `QuestionableEfficiency`. Verify that it contains `QuestieDB_Forever.toc`. If you already have the correct version, keep it. Update QuestieDB with the maintainer's packaged addon instructions.
-4. Start Forever and enable **Questionable Efficiency** and **QuestieDB** in the character-select **AddOns** list. Log in and type `/qe show`.
+4. Start Forever and enable **Questionable Efficiency** and **QuestieDB** in the character-select **AddOns** list. Log in and left-click the map icon on the lower-left edge of the minimap or type `/qe show`.
 
 QuestieDB supplies quest levels, coordinates, turn-in locations and chain data. Questie can stay disabled. World-map markers and the arrow use Blizzard UI APIs. The installed files run inside WoW without network services, API keys or a companion app.
 
@@ -19,6 +19,7 @@ QuestieDB supplies quest levels, coordinates, turn-in locations and chain data. 
 
 | Command or control | Effect |
 | --- | --- |
+| **Minimap button** | Left-click the map icon to show or hide the route window. |
 | `/qe`, `/qe toggle`, `/qe show`, `/qe hide` | Toggle, show or hide the window. Drag the title to move it. |
 | `/qe help` | List commands. |
 | **Route** / **Quest log** | Browse ordered steps or inspect every readable quest, including excluded, deferred and failed quests. Clicking a title or step shows its details. |
@@ -30,14 +31,20 @@ QuestieDB supplies quest levels, coordinates, turn-in locations and chain data. 
 | **Undo** or `/qe undo` | Undo a recent manual change. The undo stack lasts for this login or UI session. It reconciles against current quests and objectives. |
 | **Reset to automatic route** or `/qe reset` | Confirm clearing the manual next priority, deferred steps, include/exclude overrides and chain notes. The reset can be undone during the session. |
 | **Refresh route** or `/qe refresh` | Reread the log and rescore from your current position. Your manual choices still apply. |
-| **Settings** or `/qe settings` | Control markers and the arrow, center the window, or open diagnostics. |
+| **Settings** or `/qe settings` | Enable dungeon routing or dungeon prep, set a free-slot target, control navigation, or open diagnostics. |
 | `/qe diagnostics` or `/qe diag` | Open a copyable report with client build, capacity, addon status and aggregate counts. |
 
-Window position, visibility and navigation settings use account SavedVariables. Quest overrides, deferred steps, next priority and chain notes use per-character SavedVariables and are cleared when their quest or step expires. The addon never accepts quests, turns them in, selects rewards or controls your character.
+Window position, visibility, navigation and dungeon settings use account SavedVariables. Quest overrides, deferred steps, next priority and chain notes use per-character SavedVariables and are cleared when their quest or step expires. The addon never accepts quests, turns them in, selects rewards or controls your character.
+
+## Dungeon routing and prep
+
+- Enable **Include dungeon quests in routing** to add recognized dungeon quests. Raid quests stay excluded by default. Per-quest **Include** and **Exclude** overrides still apply.
+- Enable **Prepare for a dungeon** to prioritize quests you can turn in through confirmed explored outdoor stops. **Quest slots to keep open** defaults to **5**. Enter a whole number and press **Set** or **Enter**. A target of **0** disables prep routing.
+- The route header shows your open slots and prep target. Normal routing resumes when you reach the target, and prep pauses inside dungeons and raids. Turn in the suggested quests yourself to open the slots.
 
 ## How routing works
 
-- The client provides the full log, completion state, outdoor group hints, dungeon/raid tags and standard-quest capacity. Dungeon and raid tags exclude a quest by default. A database location can also exclude a quest when its objective or turn-in has only instance locations verified by the client's Encounter Journal. Some untagged quests and instances lack enough evidence to classify automatically.
+- The client provides the full log, completion state, outdoor group hints, dungeon/raid tags and standard-quest capacity. A database location can also classify a quest when its objective or turn-in has only instance locations verified by the client's Encounter Journal. Some untagged quests and instances lack enough evidence to distinguish dungeons from raids.
 - Normal mode puts known levels in ascending order. It uses QuestieDB's quest level when available, with the client level as the fallback. A scaling quest uses its effective client level when available. Unknown levels sort after known levels. Among equal levels, the addon greedily picks the closest comparable next step from the prior stop. Quest ID and objective index break ties.
 - QuestieDB points are candidate locations. The addon associates live rows with database objectives using unique names and objective types. Ambiguous matches, spell targets without a confirmed location, invalid map IDs and instance-only coordinate sentinels can have unknown locations. The addon keeps these steps visible. A phase-dependent point may be unavailable to your character. A quest with every objective finished can remain in **Quest log** while the addon waits for the client to confirm turn-in readiness.
 - Full-log mode activates at the client-reported standard quest cap. It automatically recommends a quest only if the client confirms an explored location for every remaining objective and its turn-in. It uses explored alternatives when a step has multiple locations. If none qualify, the route explains why and the quests remain in **Quest log**, where you can choose a step with **Do this next**. The exploration check covers the stops themselves. It cannot check terrain or the route between them.

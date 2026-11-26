@@ -148,12 +148,22 @@ function Settings.Apply(state, command, task, quest)
     return messages[command]
 end
 
+local defaultDungeonSlots = 5
+
+function Settings.ParseDungeonSlots(value)
+    local slots = tonumber(value)
+    if slots and slots >= 0 and slots < math.huge and slots == math.floor(slots) then return slots end
+end
+
 function Settings.Init()
     if type(QuestionableEfficiencySettings) ~= "table" then QuestionableEfficiencySettings = {} end
     local saved = QuestionableEfficiencySettings
     if type(saved.visible) ~= "boolean" then saved.visible = true end
     if type(saved.pins) ~= "boolean" then saved.pins = true end
     if type(saved.arrow) ~= "boolean" then saved.arrow = true end
+    saved.includeDungeons = saved.includeDungeons == true
+    saved.prepareForDungeon = saved.prepareForDungeon == true
+    saved.dungeonSlots = Settings.ParseDungeonSlots(saved.dungeonSlots) or defaultDungeonSlots
     addon.preferences = saved
     addon.manual = Settings.New(QuestionableEfficiencyCharacter)
     QuestionableEfficiencyCharacter = addon.manual.current

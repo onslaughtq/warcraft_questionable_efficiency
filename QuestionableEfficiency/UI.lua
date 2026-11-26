@@ -48,7 +48,10 @@ end
 local function flags(quest)
     local labels = {}
     if quest.group and not quest.instanced then labels[#labels + 1] = "Outdoor group/elite" end
-    if quest.instanced then labels[#labels + 1] = "Dungeon/raid" end
+    if quest.instanced then
+        labels[#labels + 1] = quest.instanceKind == "dungeon" and "Dungeon"
+            or (quest.instanceKind == "raid" and "Raid" or "Dungeon/raid")
+    end
     if quest.chain == "unknown" then labels[#labels + 1] = "Follow-up data unavailable" end
     if quest.chain == "unrecorded" then labels[#labels + 1] = "No follow-up recorded (unconfirmed)" end
     if quest.chain == "followup" then
@@ -80,6 +83,40 @@ function UI.SetVisible(visible)
     UI.frame:SetShown(visible)
 end
 
+function UI.CreateMinimapButton(toggle)
+    if UI.minimapButton or not Minimap then return end
+    local launcher = CreateFrame("Button", "QuestionableEfficiencyMinimapButton", Minimap)
+    launcher:SetSize(31, 31)
+    launcher:SetPoint("CENTER", Minimap, "BOTTOMLEFT", 14, 14)
+    launcher:SetFrameLevel(Minimap:GetFrameLevel() + 8)
+    launcher:RegisterForClicks("LeftButtonUp")
+    launcher:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+    local icon = launcher:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(20, 20)
+    icon:SetPoint("CENTER")
+    icon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local rim = launcher:CreateTexture(nil, "OVERLAY")
+    rim:SetSize(53, 53)
+    rim:SetPoint("TOPLEFT")
+    rim:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    launcher:SetScript("OnClick", toggle)
+    launcher:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText("Questionable Efficiency")
+        GameTooltip:AddLine("Left-click to show or hide the quest route.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    local function hideTooltip(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end
+    launcher:SetScript("OnLeave", hideTooltip)
+    launcher:SetScript("OnHide", hideTooltip)
+    UI.minimapButton = launcher
+end
+
 function UI.ShowDiagnostics()
     if not UI.diagnostics then
         local dialog = panel("QuestionableEfficiencyDiagnostics", 560, 345)
@@ -106,36 +143,70 @@ function UI.ShowDiagnostics()
     UI.diagnosticEdit:HighlightText()
 end
 
+local dungeonSlotHint = "While preparing, free slots before entering a dungeon."
+
 function UI.ShowSettings()
     if not UI.settings then
-        local dialog = panel("QuestionableEfficiencyOptions", 420, 220)
+        local dialog = panel("QuestionableEfficiencyOptions", 420, 322)
         dialog:SetPoint("CENTER", 30, 45)
         dialog:SetFrameStrata("FULLSCREEN_DIALOG")
         text(dialog, "Questionable Efficiency / Settings", 14, -8, 380, 27, "GameFontNormalLarge", gold)
         UI.provider = text(dialog, "", 14, -38, 390, 36, "GameFontHighlightSmall", muted)
-        local function checkbox(key, label, y)
+        local function checkbox(key, label, y, apply)
             local widget = CreateFrame("CheckButton", nil, dialog, "UICheckButtonTemplate")
             widget:SetPoint("TOPLEFT", 11, y)
             widget:SetSize(28, 28)
             text(dialog, label, 46, y - 1, 345, 26)
             widget:SetScript("OnClick", function(self)
                 addon.preferences[key] = self:GetChecked() and true or false
-                addon.ApplyNavigation()
+                apply()
             end)
             return widget
         end
-        UI.pinCheck = checkbox("pins", "Show route markers on the world map", -77)
-        UI.arrowCheck = checkbox("arrow", "Show straight-line arrow relative to character facing", -107)
-        button(dialog, "Center window", 13, -154, 122, function()
+        UI.pinCheck = checkbox("pins", "Show route markers on the world map", -77, addon.ApplyNavigation)
+        UI.arrowCheck = checkbox("arrow", "Show straight-line arrow relative to character facing", -107, addon.ApplyNavigation)
+        UI.dungeonCheck = checkbox("includeDungeons", "Include dungeon quests in routing", -142, addon.ApplyRoutingSettings)
+        UI.prepCheck = checkbox("prepareForDungeon", "Prepare for a dungeon", -172, addon.ApplyRoutingSettings)
+        text(dialog, "Quest slots to keep open", 46, -208, 170, 24)
+        local slots = CreateFrame("EditBox", nil, dialog, "InputBoxTemplate")
+        slots:SetPoint("TOPLEFT", 221, -208)
+        slots:SetSize(52, 24)
+        slots:SetAutoFocus(false)
+        UI.slotHint = text(dialog, dungeonSlotHint, 46, -239, 355, 24, "GameFontHighlightSmall", muted)
+        local function saveSlots()
+            local value = addon.Settings.ParseDungeonSlots(slots:GetText())
+            if value == nil then
+                UI.slotHint:SetText("Enter a whole number of slots, zero or higher.")
+                return
+            end
+            addon.preferences.dungeonSlots = value
+            UI.slotHint:SetText(dungeonSlotHint)
+            slots:SetText(tostring(value))
+            slots:ClearFocus()
+            addon.ApplyRoutingSettings()
+        end
+        slots:SetScript("OnEnterPressed", saveSlots)
+        slots:SetScript("OnEscapePressed", function(self)
+            self:SetText(tostring(addon.preferences.dungeonSlots))
+            UI.slotHint:SetText(dungeonSlotHint)
+            self:ClearFocus()
+        end)
+        button(dialog, "Set", 284, -208, 67, saveSlots)
+        UI.dungeonSlots = slots
+        button(dialog, "Center window", 13, -281, 122, function()
             addon.preferences.position = nil
             addon.Settings.Reanchor(UI.frame)
         end)
-        button(dialog, "Diagnostics", 148, -154, 115, UI.ShowDiagnostics)
-        button(dialog, "Close", 279, -154, 124, function() dialog:Hide() end)
+        button(dialog, "Diagnostics", 148, -281, 115, UI.ShowDiagnostics)
+        button(dialog, "Close", 279, -281, 124, function() dialog:Hide() end)
         UI.settings = dialog
     end
     UI.pinCheck:SetChecked(addon.preferences.pins)
     UI.arrowCheck:SetChecked(addon.preferences.arrow)
+    UI.dungeonCheck:SetChecked(addon.preferences.includeDungeons)
+    UI.prepCheck:SetChecked(addon.preferences.prepareForDungeon)
+    UI.dungeonSlots:SetText(tostring(addon.preferences.dungeonSlots))
+    UI.slotHint:SetText(dungeonSlotHint)
     UI.provider:SetText(addon.Data.status)
     UI.settings:Show()
 end
@@ -291,7 +362,7 @@ local function questLogEntries(plan)
     for _, entry in ipairs(entries) do
         entry.override = override[entry.quest.id]
         entry.status = plan.status[entry.key]
-        if entry.override == "exclude" or (not entry.override and entry.quest.instanced) then entry.status = "excluded" end
+        if addon.Route.IsExcluded(entry.quest, entry.override, addon.preferences.includeDungeons) then entry.status = "excluded" end
         entry.routable = plan.byKey[entry.key] ~= nil
     end
     return entries
@@ -322,9 +393,14 @@ function UI.Render(origin)
     selected = selected or current
     UI.selection = selected
     UI.offset = math.min(UI.offset, math.max(0, #entries - rowsVisible))
-    local mode = plan.full and "Full-log routing" or "Normal routing"
+    local mode = plan.slotMode == "prep" and "Dungeon prep" or (plan.full and "Full-log routing" or "Normal routing")
     if not snapshot.capacity or snapshot.count == nil then mode = "Normal routing / full status unknown" end
-    UI.summary:SetText(("Quest log %s / %s   |   %s"):format(snapshot.count or "?", snapshot.capacity or "?", mode))
+    local slots = ""
+    if plan.openSlots then
+        slots = plan.slotTarget and ("   |   %d open / %d target"):format(plan.openSlots, plan.slotTarget)
+            or ("   |   %d open"):format(plan.openSlots)
+    end
+    UI.summary:SetText(("Quest log %s / %s   |   %s%s"):format(snapshot.count or "?", snapshot.capacity or "?", mode, slots))
     UI.nextTitle:SetText(current and (current.quest.title .. "  /  " .. level(current.quest)) or "No next objective")
     UI.nextTitle:SetEnabled(current ~= nil)
     UI.nextObjective:SetText(current and current.text or "")
@@ -359,7 +435,9 @@ function UI.Render(origin)
     if selected then
         local detail = flags(selected.quest)
         local override = selected.override and (" / Manual " .. selected.override) or ""
-        if selected.status == "exploration" then override = override .. " / Exploration unconfirmed" end
+        if selected.status == "exploration" then
+            override = override .. (plan.slotMode == "prep" and " / Explored outdoor route unavailable" or " / Exploration unconfirmed")
+        end
         UI.details:SetText(selected.quest.title .. "  /  " .. level(selected.quest) .. "\n" ..
             selected.text .. "\n" .. pointLabel(point, true) .. (point and point.source and (" / " .. point.source) or "") ..
             (detail ~= "" and ("\n" .. detail) or "") .. override)

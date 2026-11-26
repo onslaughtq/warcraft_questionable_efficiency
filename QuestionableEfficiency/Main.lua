@@ -7,10 +7,6 @@ local entered, signature, providerRefresh = false, nil, nil
 local builds, dataErrors = 0, 0
 local explorationRevision = 0
 
-local function isFull(snapshot)
-    return snapshot.capacity and snapshot.count and snapshot.count >= snapshot.capacity
-end
-
 local function summarize(snapshot)
     local records = {}
     for _, quest in ipairs(snapshot.quests) do
@@ -25,7 +21,8 @@ local function summarize(snapshot)
     end
     table.sort(records)
     records[#records + 1] = table.concat({ snapshot.count or "?", snapshot.capacity or "?", snapshot.warning or "",
-        Data.status, tostring(Data.chainReady), tostring(Data.chainFailed), isFull(snapshot) and explorationRevision or 0 }, "\030")
+        Data.status, tostring(Data.chainReady), tostring(Data.chainFailed), tostring(snapshot.inDungeonOrRaid),
+        explorationRevision }, "\030")
     return table.concat(records, "\029")
 end
 
@@ -74,15 +71,21 @@ reevaluate = function(message, force, undoPlan)
     QuestionableEfficiencyCharacter = addon.manual.current
     local previous = addon.plan
     addon.snapshot, addon.origin = snapshot, Client.PlayerPosition()
-    addon.plan = Route.Build(snapshot, addon.manual.current, addon.origin, undoPlan or previous, force)
+    addon.plan = Route.Build(snapshot, addon.manual.current, addon.origin, undoPlan or previous, force, addon.preferences)
     builds = builds + 1
-    if previous and previous.full ~= addon.plan.full then
-        local transition = addon.plan.full and "Log reached capacity. Prioritizing a free slot."
-            or (snapshot.capacity and snapshot.count and "A slot opened. Returned to normal level order."
-                or "Capacity status changed. Using normal level order.")
-        message = message and (message .. " " .. transition) or transition
-    elseif not previous and addon.plan.full then
-        message = message or "Log is at capacity. Prioritizing a free slot."
+    local plan = addon.plan
+    if plan.slotMode ~= (previous and previous.slotMode) then
+        if plan.slotMode == "prep" then
+            message = ("Dungeon prep: %d of %d quest slots open."):format(plan.openSlots, plan.slotTarget)
+        elseif plan.slotMode == "full" then
+            message = "Log reached capacity. Prioritizing a free slot."
+        elseif previous.slotMode == "prep" and plan.slotTarget and plan.openSlots and plan.openSlots >= plan.slotTarget then
+            message = ("Dungeon slot target met. %d quest slots open."):format(plan.openSlots)
+        elseif previous.slotMode == "full" and plan.openSlots then
+            message = "A slot opened. Returned to normal level order."
+        else
+            message = "Returned to normal level order."
+        end
     elseif not message and previous then
         local before, after = previous.steps[1], addon.plan.steps[1]
         if before and after and before.key ~= after.key then
@@ -115,6 +118,10 @@ function addon.Refresh(message, force)
     reevaluate(message, force)
 end
 
+function addon.ApplyRoutingSettings()
+    reevaluate(nil, true)
+end
+
 function addon.ManualAction(command, selected)
     if not addon.plan then return end
     local task = selected and addon.plan.byKey[selected.key]
@@ -130,7 +137,7 @@ function addon.ManualAction(command, selected)
     if message then
         if command ~= "undo" and history[#history] then
             local prior = previous.steps[1]
-            history[#history].plan = { full = previous.full, goal = previous.goal, steps = { prior } }
+            history[#history].plan = { slotMode = previous.slotMode, goal = previous.goal, steps = { prior } }
         end
         reevaluate(message, command == "reset", undoPlan)
     end
@@ -151,17 +158,20 @@ function addon.Diagnostics()
     local blockedCount = 0
     for _ in pairs(explorationBlocked) do blockedCount = blockedCount + 1 end
     return table.concat({
-        "Questionable Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.1.1"),
+        "Questionable Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.2.0"),
         "Client: " .. Client.BuildLabel(),
         "Quest log: " .. tostring(snapshot and snapshot.count or "?") .. " / " .. tostring(snapshot and snapshot.capacity or "?"),
         "Readable quests: " .. tostring(snapshot and #snapshot.quests or 0),
-        "Routing mode: " .. (plan and plan.full and "full log" or "normal"),
+        "Routing mode: " .. (plan and plan.slotMode or "normal"),
+        ("Dungeon routing: %s; dungeon prep: %s; slot target: %s"):format(
+            addon.preferences.includeDungeons and "on" or "off",
+            addon.preferences.prepareForDungeon and "on" or "off", tostring(addon.preferences.dungeonSlots)),
         "Data provider: " .. Data.status,
         "Reverse chain index: " .. (Data.chainReady and "ready" or (Data.chainFailed and "failed; /reload to retry"
             or (Data.chainJob and "building" or "unavailable"))),
         ("Unknown chains: %d; no DB record: %d; unknown locations: %d; DB read failures: %d"):format(
             unknownChains, missingRecords, unknownLocations, dataErrors),
-        ("No follow-up recorded (unconfirmed): %d; full-log quests blocked by unconfirmed exploration: %d"):format(
+        ("No follow-up recorded (unconfirmed): %d; quests blocked by slot-freeing location checks: %d"):format(
             unrecordedChains, blockedCount),
         ("Navigation: %s; player position %s; arrow preference %s"):format(Navigation.mapStatus,
             addon.origin and "available" or "unavailable", addon.preferences.arrow and "on" or "off"),
@@ -175,11 +185,15 @@ local function printHelp()
     print("Select a step to view it. Change priorities with Do this next, Skip for now or Exclude. Quest log shows deferred and excluded steps.")
 end
 
+local function toggleWindow()
+    UI.SetVisible(not UI.frame:IsShown())
+    updatePosition()
+end
+
 local function slash(message)
     local command = message:match("^%s*(%S*)"):lower()
     if command == "" or command == "toggle" then
-        UI.SetVisible(not UI.frame:IsShown())
-        updatePosition()
+        toggleWindow()
     elseif command == "show" or command == "hide" then
         UI.SetVisible(command == "show")
         updatePosition()
@@ -232,6 +246,7 @@ local function onEvent(_, event, first, second)
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         entered = true
+        UI.CreateMinimapButton(toggleWindow)
         reevaluate()
         startProviderTimer()
         if not positionTimer then positionTimer = C_Timer.NewTicker(0.5, updatePosition) end
@@ -244,7 +259,7 @@ local function onEvent(_, event, first, second)
     elseif event == "QUEST_DATA_LOAD_RESULT" then
         if Client.Readable(second, "boolean") and second then queueUpdate() end
     elseif event == "MAP_EXPLORATION_UPDATED" then
-        if addon.plan and addon.plan.full then
+        if addon.plan and addon.plan.slotMode then
             explorationRevision = explorationRevision + 1
             queueUpdate()
         end

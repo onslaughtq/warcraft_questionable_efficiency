@@ -20,11 +20,11 @@ version=$(awk '
         version = $0
     }
     END {
-        if (count != 1 || version !~ /^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$/) exit 1
+        if (count != 1 || version !~ /^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*$/) exit 1
         print version
     }
 ' "$staging/manifest") || {
-    printf 'Expected one valid Version header in %s.\n' "$manifest" >&2
+    printf 'Expected one Version header in %s with three or more dot-separated numeric components.\n' "$manifest" >&2
     exit 1
 }
 

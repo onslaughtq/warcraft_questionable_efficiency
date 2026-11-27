@@ -3,7 +3,7 @@
 ## ExcludeLoadGameType: standard, classic
 ## Title: Questionable Efficiency
 ## Notes: Routes the quests already in your Forever quest log.
-## Version: 0.2.0
+## Version: 0.2.2
 ## Dependencies: QuestieDB
 ## X-License: GPL-3.0-only
 ## SavedVariables: QuestionableEfficiencySettings

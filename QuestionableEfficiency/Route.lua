@@ -244,12 +244,15 @@ function Route.Build(snapshot, manual, origin, previous, force, preferences)
     end
 
     local openSlots = snapshot.capacity and snapshot.count and math.max(0, snapshot.capacity - snapshot.count)
-    local slotTarget = preferences.prepareForDungeon and not snapshot.inDungeonOrRaid and snapshot.capacity
+    local slotTarget = preferences.prepareForDungeon and snapshot.capacity
         and math.min(preferences.dungeonSlots, snapshot.capacity) or nil
     local full = openSlots == 0
-    local preparing = openSlots and slotTarget and openSlots < slotTarget
-    local slotMode = preparing and "prep" or (full and "full" or nil)
-    local prefix = preparing and "Dungeon prep: " or "Quest log full: "
+    local slotMode
+    if openSlots and slotTarget and openSlots < slotTarget then
+        slotMode = full and "full" or (not snapshot.inDungeonOrRaid and "prep" or nil)
+    end
+    local preparing = slotMode == "prep"
+    local prefix = preparing and "Quest slot target: " or "Quest log full: "
     local sameMode = previous and previous.slotMode == slotMode and not force
     local held = sameMode and previous.steps[1] or nil
     local steps, current, purpose = {}
@@ -300,8 +303,8 @@ function Route.Build(snapshot, manual, origin, previous, force, preferences)
             purpose = "Quest level unknown. Known quest levels come first."
         end
     elseif preparing then
-        purpose = "Dungeon prep: no eligible quest has a complete route through explored outdoor stops. See Quest log."
-    elseif full then
+        purpose = "Quest slot target: no eligible quest has a complete route through explored outdoor stops. See Quest log."
+    elseif slotMode == "full" then
         purpose = "Quest log full: no eligible quest has a complete route through confirmed explored stops. See Quest log."
     else
         purpose = "No eligible steps. Review the quest list for exclusions or deferred objectives."

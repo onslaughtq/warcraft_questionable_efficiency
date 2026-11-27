@@ -85,12 +85,35 @@ end
 
 function UI.CreateMinimapButton(toggle)
     if UI.minimapButton or not Minimap then return end
-    local launcher = CreateFrame("Button", "QuestionableEfficiencyMinimapButton", Minimap)
+    local minimap = Minimap
+    local launcher = CreateFrame("Button", "QuestionableEfficiencyMinimapButton", minimap)
     launcher:SetSize(31, 31)
-    launcher:SetPoint("CENTER", Minimap, "BOTTOMLEFT", 14, 14)
-    launcher:SetFrameLevel(Minimap:GetFrameLevel() + 8)
+    launcher:SetFrameLevel(minimap:GetFrameLevel() + 8)
     launcher:RegisterForClicks("LeftButtonUp")
+    launcher:RegisterForDrag("LeftButton")
     launcher:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+    local angle = addon.preferences.minimapAngle
+    if type(angle) ~= "number" or not (angle >= -math.pi and angle <= math.pi) then
+        angle = -3 * math.pi / 4
+    end
+    local function anchorLauncher()
+        launcher:SetPoint("CENTER", minimap, "CENTER", math.cos(angle) * minimap:GetWidth() / 2,
+            math.sin(angle) * minimap:GetHeight() / 2)
+    end
+    local function followCursor()
+        local centerX, centerY = minimap:GetCenter()
+        if not centerX then return end
+        local cursorX, cursorY = GetCursorPosition()
+        local scale = minimap:GetEffectiveScale()
+        local x, y = cursorX / scale - centerX, cursorY / scale - centerY
+        if x == 0 and y == 0 then return end
+        angle = math.atan2(y, x)
+        addon.preferences.minimapAngle = angle
+        anchorLauncher()
+    end
+    anchorLauncher()
+    minimap:HookScript("OnSizeChanged", anchorLauncher)
 
     local icon = launcher:CreateTexture(nil, "ARTWORK")
     icon:SetSize(20, 20)
@@ -107,13 +130,25 @@ function UI.CreateMinimapButton(toggle)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("Questionable Efficiency")
         GameTooltip:AddLine("Left-click to show or hide the quest route.", 1, 1, 1)
+        GameTooltip:AddLine("Drag to move along the minimap border.", 1, 1, 1)
         GameTooltip:Show()
     end)
     local function hideTooltip(self)
         if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end
     launcher:SetScript("OnLeave", hideTooltip)
-    launcher:SetScript("OnHide", hideTooltip)
+    launcher:SetScript("OnDragStart", function(self)
+        hideTooltip(self)
+        self:SetScript("OnUpdate", followCursor)
+    end)
+    launcher:SetScript("OnDragStop", function(self)
+        followCursor()
+        self:SetScript("OnUpdate", nil)
+    end)
+    launcher:SetScript("OnHide", function(self)
+        hideTooltip(self)
+        self:SetScript("OnUpdate", nil)
+    end)
     UI.minimapButton = launcher
 end
 
@@ -143,7 +178,7 @@ function UI.ShowDiagnostics()
     UI.diagnosticEdit:HighlightText()
 end
 
-local dungeonSlotHint = "While preparing, free slots before entering a dungeon."
+local questSlotHint = "Prioritize freeing slots when below the target."
 
 function UI.ShowSettings()
     if not UI.settings then
@@ -166,13 +201,13 @@ function UI.ShowSettings()
         UI.pinCheck = checkbox("pins", "Show route markers on the world map", -77, addon.ApplyNavigation)
         UI.arrowCheck = checkbox("arrow", "Show straight-line arrow relative to character facing", -107, addon.ApplyNavigation)
         UI.dungeonCheck = checkbox("includeDungeons", "Include dungeon quests in routing", -142, addon.ApplyRoutingSettings)
-        UI.prepCheck = checkbox("prepareForDungeon", "Prepare for a dungeon", -172, addon.ApplyRoutingSettings)
-        text(dialog, "Quest slots to keep open", 46, -208, 170, 24)
+        UI.prepCheck = checkbox("prepareForDungeon", "Keep quest slots open", -172, addon.ApplyRoutingSettings)
+        text(dialog, "Number of slots to keep open", 46, -208, 170, 24)
         local slots = CreateFrame("EditBox", nil, dialog, "InputBoxTemplate")
         slots:SetPoint("TOPLEFT", 221, -208)
         slots:SetSize(52, 24)
         slots:SetAutoFocus(false)
-        UI.slotHint = text(dialog, dungeonSlotHint, 46, -239, 355, 24, "GameFontHighlightSmall", muted)
+        UI.slotHint = text(dialog, questSlotHint, 46, -239, 355, 24, "GameFontHighlightSmall", muted)
         local function saveSlots()
             local value = addon.Settings.ParseDungeonSlots(slots:GetText())
             if value == nil then
@@ -180,7 +215,7 @@ function UI.ShowSettings()
                 return
             end
             addon.preferences.dungeonSlots = value
-            UI.slotHint:SetText(dungeonSlotHint)
+            UI.slotHint:SetText(questSlotHint)
             slots:SetText(tostring(value))
             slots:ClearFocus()
             addon.ApplyRoutingSettings()
@@ -188,7 +223,7 @@ function UI.ShowSettings()
         slots:SetScript("OnEnterPressed", saveSlots)
         slots:SetScript("OnEscapePressed", function(self)
             self:SetText(tostring(addon.preferences.dungeonSlots))
-            UI.slotHint:SetText(dungeonSlotHint)
+            UI.slotHint:SetText(questSlotHint)
             self:ClearFocus()
         end)
         button(dialog, "Set", 284, -208, 67, saveSlots)
@@ -206,7 +241,7 @@ function UI.ShowSettings()
     UI.dungeonCheck:SetChecked(addon.preferences.includeDungeons)
     UI.prepCheck:SetChecked(addon.preferences.prepareForDungeon)
     UI.dungeonSlots:SetText(tostring(addon.preferences.dungeonSlots))
-    UI.slotHint:SetText(dungeonSlotHint)
+    UI.slotHint:SetText(questSlotHint)
     UI.provider:SetText(addon.Data.status)
     UI.settings:Show()
 end
@@ -252,6 +287,10 @@ end
 function UI.Create()
     local frame = panel("QuestionableEfficiencyWindow", width, 538)
     UI.frame = frame
+    table.insert(UISpecialFrames, frame:GetName())
+    frame:SetScript("OnHide", function(self)
+        if not self:IsShown() then addon.preferences.visible = false end
+    end)
     frame:SetMovable(true)
     addon.Settings.Reanchor(frame)
     local drag = CreateFrame("Frame", nil, frame)
@@ -393,7 +432,8 @@ function UI.Render(origin)
     selected = selected or current
     UI.selection = selected
     UI.offset = math.min(UI.offset, math.max(0, #entries - rowsVisible))
-    local mode = plan.slotMode == "prep" and "Dungeon prep" or (plan.full and "Full-log routing" or "Normal routing")
+    local mode = plan.slotMode == "prep" and "Freeing quest slots"
+        or (plan.slotMode == "full" and "Full-log routing" or "Normal routing")
     if not snapshot.capacity or snapshot.count == nil then mode = "Normal routing / full status unknown" end
     local slots = ""
     if plan.openSlots then

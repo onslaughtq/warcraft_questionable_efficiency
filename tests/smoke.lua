@@ -2,12 +2,20 @@
 local function noop() end
 local callbacks, timers, after = {}, {}, {}
 local methods = {
-    SetSize = noop, SetPoint = noop, ClearAllPoints = noop, SetFrameStrata = noop, SetClampedToScreen = noop,
+    SetSize = function(self, width, height)
+        self.width, self.height = width, height
+        if self.OnSizeChanged then self:OnSizeChanged(width, height) end
+    end,
+    SetPoint = function(self, ...) self.point = { ... } end,
+    ClearAllPoints = noop, SetFrameStrata = noop, SetClampedToScreen = noop,
     EnableMouse = noop, EnableMouseWheel = noop, SetAllPoints = noop, SetFontObject = noop,
     SetAutoFocus = noop, SetJustifyH = noop, SetJustifyV = noop, SetTextColor = noop, SetColorTexture = noop,
     SetMovable = noop, RegisterForDrag = noop, SetHighlightTexture = noop, SetWordWrap = noop,
     RegisterForClicks = noop, SetTexture = noop, SetTexCoord = noop, SetFrameLevel = noop,
     GetFrameLevel = function() return 0 end,
+    GetName = function(self) return self.name end,
+    GetWidth = function(self) return self.width end,
+    GetHeight = function(self) return self.height end,
     SetThickness = noop, SetWidth = noop, SetMultiLine = noop, SetScrollChild = noop, SetFocus = noop, HighlightText = noop,
     SetText = function(self, label) self.label = label end,
     GetText = function(self) return self.label end,
@@ -15,22 +23,38 @@ local methods = {
     SetChecked = function(self, checked) self.checked = checked end,
     GetChecked = function(self) return self.checked end,
     SetScript = function(self, name, fn) self[name] = fn end,
+    HookScript = function(self, name, fn)
+        local previous = self[name]
+        self[name] = function(...)
+            if previous then previous(...) end
+            fn(...)
+        end
+    end,
     RegisterEvent = function(self, name) callbacks[name] = self.OnEvent end,
     SetEnabled = function(self, enabled) self.enabled = enabled end,
-    SetShown = function(self, shown) self.shown = shown end,
+    SetShown = function(self, shown) if shown then self:Show() else self:Hide() end end,
     IsShown = function(self) return self.shown end,
     Show = function(self) self.shown = true end,
-    Hide = function(self) self.shown = false end,
+    Hide = function(self)
+        if not self.shown then return end
+        self.shown = false
+        if self.OnHide then self:OnHide() end
+    end,
     SetStartPoint = function(_, anch, parent, x, y) assert(anch == "CENTER" and parent and x and y) end,
     SetEndPoint = function(_, anch, parent, x, y) assert(anch == "CENTER" and parent and x and y) end,
 }
-function CreateFrame(_, _, parent) return setmetatable({ shown = true, parent = parent }, { __index = methods }) end
+function CreateFrame(_, name, parent)
+    local frame = setmetatable({ shown = true, name = name, parent = parent }, { __index = methods })
+    if name then _G[name] = frame end
+    return frame
+end
 methods.CreateTexture, methods.CreateFontString, methods.CreateLine = CreateFrame, CreateFrame, CreateFrame
 function GetBuildInfo() return "1.60.1", "71091", "", 16001 end
 CreateVector2D = function(x, y) return { GetXY = function() return x, y end } end
 function GetPlayerFacing() return 0 end
 UIParent = CreateFrame()
-SlashCmdList, StaticPopupDialogs = {}, {}
+SlashCmdList, StaticPopupDialogs, UISpecialFrames = {}, {}, {}
+GameTooltip = { IsOwned = function() return false end }
 C_Timer = {
     After = function(_, callback) after[#after + 1] = callback end,
     NewTicker = function(delay, callback)
@@ -72,15 +96,44 @@ event("ADDON_LOADED", name)
 assert(addon.preferences.pins == false)
 assert(addon.manual.current.chains[11] == "final")
 Minimap = CreateFrame()
+Minimap:SetSize(198, 198)
+Minimap.GetCenter = function() return 400, 300 end
+Minimap.GetEffectiveScale = function() return 0.5 end
 event("PLAYER_ENTERING_WORLD")
 assert(addon.plan.steps[1].quest.id == 10)
 assert(addon.UI.frame:IsShown())
 local launcher = assert(addon.UI.minimapButton)
 assert(launcher.parent == Minimap)
+local function checkLauncherPoint(x, y)
+    local point = launcher.point
+    assert(point[1] == "CENTER" and point[2] == Minimap and point[3] == "CENTER")
+    assert(math.abs(point[4] - x) < 0.001 and math.abs(point[5] - y) < 0.001)
+end
+local diagonal = -99 / math.sqrt(2)
+checkLauncherPoint(diagonal, diagonal)
+local cursorX, cursorY = 250, 150
+function GetCursorPosition() return cursorX, cursorY end
+launcher:OnDragStart()
+launcher:OnUpdate()
+checkLauncherPoint(99, 0)
+cursorX, cursorY = 200, 200
+launcher:OnDragStop()
+assert(not launcher.OnUpdate and addon.UI.frame:IsShown())
+assert(QuestionableEfficiencySettings.minimapAngle == math.pi / 2)
+checkLauncherPoint(0, 99)
+Minimap:SetSize(220, 220)
+checkLauncherPoint(0, 110)
 launcher:OnClick()
 assert(not addon.UI.frame:IsShown() and launcher:IsShown() and not addon.preferences.visible)
 launcher:OnClick()
 assert(addon.UI.frame:IsShown() and addon.preferences.visible)
+assert(_G[UISpecialFrames[1]] == addon.UI.frame)
+for _, frameName in ipairs(UISpecialFrames) do
+    if _G[frameName]:IsShown() then _G[frameName]:Hide() end
+end
+assert(not addon.UI.frame:IsShown() and not QuestionableEfficiencySettings.visible)
+launcher:OnClick()
+assert(addon.UI.frame:IsShown() and QuestionableEfficiencySettings.visible)
 event("PLAYER_ENTERING_WORLD")
 assert(addon.UI.minimapButton == launcher)
 assert(addon.Diagnostics():find("QuestieDB unavailable", 1, true))
@@ -105,8 +158,23 @@ addon.UI.undo:OnClick()
 assert(addon.plan.steps[1].quest.id == 10)
 count = cap
 event("QUEST_LOG_UPDATE")
+assert(addon.plan.full and addon.plan.slotMode == nil and addon.plan.steps[1].quest.id == 10)
+assert(addon.UI.summary.label:find("Normal routing", 1, true))
+SlashCmdList.QUESTIONABLEEFFICIENCY("settings")
+assert(not addon.UI.prepCheck:GetChecked() and addon.UI.dungeonSlots:GetText() == "5")
+addon.UI.dungeonSlots:SetText("1")
+addon.UI.dungeonSlots:OnEnterPressed()
+assert(addon.plan.slotMode == nil)
+addon.UI.prepCheck:SetChecked(true)
+addon.UI.prepCheck:OnClick()
 assert(addon.plan.full and addon.notice:find("reached capacity", 1, true))
+assert(addon.UI.summary.label:find("Full-log routing", 1, true))
 assert(#addon.plan.steps == 0)
+addon.UI.prepCheck:SetChecked(false)
+addon.UI.prepCheck:OnClick()
+assert(addon.plan.full and addon.plan.slotMode == nil and addon.plan.steps[1].quest.id == 10)
+addon.UI.prepCheck:SetChecked(true)
+addon.UI.prepCheck:OnClick()
 local explored = false
 C_MapExplorationInfo = { GetExploredAreaIDsAtPosition = function() return explored and { 21 } or nil end }
 local enrich = addon.Data.Enrich
@@ -135,7 +203,7 @@ assert(not addon.UI.frame:IsShown())
 SlashCmdList.QUESTIONABLEEFFICIENCY("show")
 assert(addon.UI.frame:IsShown())
 SlashCmdList.QUESTIONABLEEFFICIENCY("settings")
-assert(addon.UI.dungeonSlots:GetText() == "5")
+assert(addon.UI.dungeonSlots:GetText() == "1")
 Enum = { QuestTag = { Dungeon = 81 } }
 C_QuestLog.GetQuestTagInfo = function() return { tagID = 81 } end
 event("QUEST_LOG_UPDATE")
@@ -143,8 +211,8 @@ assert(#addon.plan.steps == 0)
 addon.UI.dungeonCheck:SetChecked(true)
 addon.UI.dungeonCheck:OnClick()
 assert(QuestionableEfficiencySettings.includeDungeons and addon.plan.steps[1].quest.id == 11)
-addon.UI.prepCheck:SetChecked(true)
-addon.UI.prepCheck:OnClick()
+addon.UI.dungeonSlots:SetText("5")
+addon.UI.dungeonSlots:OnEnterPressed()
 assert(addon.plan.slotMode == "prep" and addon.plan.openSlots == 2 and #addon.plan.steps == 0)
 assert(addon.UI.summary.label:find("2 open / 3 target", 1, true))
 IsInInstance = function() return true, "party" end
@@ -160,4 +228,4 @@ addon.UI.dungeonSlots:SetText("2")
 addon.UI.dungeonSlots:OnEnterPressed()
 assert(QuestionableEfficiencySettings.dungeonSlots == 2 and addon.plan.slotMode == nil)
 assert(addon.notice:find("target met", 1, true) and addon.plan.steps[1].quest.id == 11)
-print("PASS TOC startup, minimap launcher, navigation, quest events, dungeon settings, and slash commands")
+print("PASS TOC startup, minimap launcher, navigation, quest events, routing settings, and slash commands")

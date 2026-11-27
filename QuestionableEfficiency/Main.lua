@@ -76,12 +76,12 @@ reevaluate = function(message, force, undoPlan)
     local plan = addon.plan
     if plan.slotMode ~= (previous and previous.slotMode) then
         if plan.slotMode == "prep" then
-            message = ("Dungeon prep: %d of %d quest slots open."):format(plan.openSlots, plan.slotTarget)
+            message = ("Quest slot target: %d of %d slots open."):format(plan.openSlots, plan.slotTarget)
         elseif plan.slotMode == "full" then
             message = "Log reached capacity. Prioritizing a free slot."
         elseif previous.slotMode == "prep" and plan.slotTarget and plan.openSlots and plan.openSlots >= plan.slotTarget then
-            message = ("Dungeon slot target met. %d quest slots open."):format(plan.openSlots)
-        elseif previous.slotMode == "full" and plan.openSlots then
+            message = ("Quest slot target met. %d slots open."):format(plan.openSlots)
+        elseif previous.slotMode == "full" and plan.openSlots and plan.openSlots > 0 then
             message = "A slot opened. Returned to normal level order."
         else
             message = "Returned to normal level order."
@@ -158,12 +158,12 @@ function addon.Diagnostics()
     local blockedCount = 0
     for _ in pairs(explorationBlocked) do blockedCount = blockedCount + 1 end
     return table.concat({
-        "Questionable Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.2.0"),
+        "Questionable Efficiency " .. (Client.Call(C_AddOns and C_AddOns.GetAddOnMetadata, name, "Version") or "0.2.2"),
         "Client: " .. Client.BuildLabel(),
         "Quest log: " .. tostring(snapshot and snapshot.count or "?") .. " / " .. tostring(snapshot and snapshot.capacity or "?"),
         "Readable quests: " .. tostring(snapshot and #snapshot.quests or 0),
         "Routing mode: " .. (plan and plan.slotMode or "normal"),
-        ("Dungeon routing: %s; dungeon prep: %s; slot target: %s"):format(
+        ("Dungeon routing: %s; keep quest slots open: %s; slot target: %s"):format(
             addon.preferences.includeDungeons and "on" or "off",
             addon.preferences.prepareForDungeon and "on" or "off", tostring(addon.preferences.dungeonSlots)),
         "Data provider: " .. Data.status,

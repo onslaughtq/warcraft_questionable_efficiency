@@ -42,6 +42,8 @@ local function manual()
     return Settings.New().current
 end
 
+local keepOneSlotOpen = { prepareForDungeon = true, dungeonSlots = 1 }
+
 test("strict ascending levels; known levels precede unknowns and same-level travel is reduced", function()
     local log = snapshot({
         quest(1, nil), quest(2, 20, { objectives = { step(1, point(10)) } }),
@@ -80,7 +82,7 @@ test("dungeon and raid exclusion, outdoor groups, and both manual overrides", fu
     eq(#plan.steps, 1)
 end)
 
-test("dungeon prep frees outdoor slots to the target and pauses inside a dungeon", function()
+test("below the slot target, routing uses outdoor stops and pauses inside a dungeon", function()
     local inside = point(5)
     inside.instanced = "dungeon"
     local preferences = { includeDungeons = true, prepareForDungeon = true, dungeonSlots = 5 }
@@ -89,9 +91,13 @@ test("dungeon prep frees outdoor slots to the target and pauses inside a dungeon
     local ready = quest(2, 10, { complete = true, turnin = { points = { inside, point(100) } } })
     local indoorTurnin = quest(3, 12, { complete = true, instanced = "Dungeon tag", instanceKind = "dungeon",
         turnin = { points = { inside } } })
-    local log = snapshot({ dungeon, ready, indoorTurnin }, 8, 10)
+    local log = snapshot({ dungeon, ready, indoorTurnin }, 10, 10)
     local state = manual()
     local plan = Route.Build(log, state, point(0), nil, nil, preferences)
+    eq(plan.slotMode, "full")
+    eq(plan.steps[1].point, inside)
+    log.count = 8
+    plan = Route.Build(log, state, point(0), plan, nil, preferences)
     eq(plan.slotMode, "prep")
     eq(plan.openSlots, 2)
     eq(plan.slotTarget, 5)
@@ -113,8 +119,9 @@ test("dungeon prep frees outdoor slots to the target and pauses inside a dungeon
     eq(plan.openSlots, 5)
     eq(plan.steps[1].quest.id, 1)
     log.count, preferences.dungeonSlots = 10, 0
-    eq(Route.Build(log, state, point(0), plan, nil, preferences).slotMode, "full")
+    eq(Route.Build(log, state, point(0), plan, nil, preferences).slotMode, nil)
     log.count = nil
+    preferences.dungeonSlots = 5
     eq(Route.Build(log, state, point(0), plan, nil, preferences).slotMode, nil)
 end)
 
@@ -136,14 +143,20 @@ test("full log selects a practical slot-freeing turn-in and respects instance ex
     local far = quest(3, 10, { complete = true, chain = "final", turnin = { text = "Turn in", points = { point(10, 2) } } })
     local dungeon = quest(4, 15, { complete = true, instanced = "Dungeon tag",
         turnin = { text = "Turn in", points = { point(10) } } })
-    local plan = Route.Build(snapshot({ low, nearby, far, dungeon }, 15, 15), manual(), point(0))
+    local log = snapshot({ low, nearby, far, dungeon }, 15, 15)
+    local plan = Route.Build(log, manual(), point(0))
     eq(plan.full, true)
+    eq(plan.slotMode, nil)
+    eq(plan.steps[1].quest.id, 1)
+    plan = Route.Build(log, manual(), point(0), plan, nil, keepOneSlotOpen)
+    eq(plan.full, true)
+    eq(plan.slotMode, "full")
     eq(plan.steps[1].key, "2:turnin")
     assert(plan.reason:find("standalone", 1, true))
     eq(plan.status["4:turnin"], "excluded")
     local followup = quest(5, 15, { complete = true, chain = "followup",
         turnin = { text = "Turn in", points = { point(120) } } })
-    plan = Route.Build(snapshot({ low, far, followup }, 15, 15), manual(), point(0))
+    plan = Route.Build(snapshot({ low, far, followup }, 15, 15), manual(), point(0), nil, nil, keepOneSlotOpen)
     eq(plan.steps[1].key, "5:turnin")
     assert(plan.reason:find("defer", 1, true))
 end)
@@ -156,19 +169,20 @@ test("full log weighs remaining work, travel, chain evidence, then level", funct
     local unknown = quest(3, 1, { objectives = { step(1, point(180), false, 2) },
         turnin = { points = { point(320) } } })
     local log = snapshot({ long, short, unknown }, 3, 3)
-    eq(Route.Build(log, manual(), point(0)).steps[1].quest.id, 2)
+    eq(Route.Build(log, manual(), point(0), nil, nil, keepOneSlotOpen).steps[1].quest.id, 2)
     local state = Settings.New()
-    Settings.Apply(state, "skip", Route.Build(log, state.current, point(0)).steps[1])
-    eq(Route.Build(log, state.current, point(0)).steps[1].quest.id, 3)
+    Settings.Apply(state, "skip", Route.Build(log, state.current, point(0), nil, nil, keepOneSlotOpen).steps[1])
+    eq(Route.Build(log, state.current, point(0), nil, nil, keepOneSlotOpen).steps[1].quest.id, 3)
 end)
 
 test("normal level order resumes as soon as a slot opens", function()
     local low = quest(1, 5, { objectives = { step(1, point(300)) } })
     local ready = quest(2, 15, { complete = true, chain = "final", turnin = { points = { point(50) } } })
-    local full = Route.Build(snapshot({ low, ready }, 10, 10), manual(), point(0))
+    local full = Route.Build(snapshot({ low, ready }, 10, 10), manual(), point(0), nil, nil, keepOneSlotOpen)
     eq(full.steps[1].quest.id, 2)
-    local open = Route.Build(snapshot({ low, ready }, 9, 10), manual(), point(0), full)
+    local open = Route.Build(snapshot({ low, ready }, 9, 10), manual(), point(0), full, nil, keepOneSlotOpen)
     eq(open.full, false)
+    eq(open.slotMode, nil)
     eq(open.steps[1].quest.id, 1)
 end)
 
@@ -268,21 +282,21 @@ test("full-log routing requires explored objectives and turn-in and uses only ex
         turnin = { points = { point(190) } } })
     local log = snapshot({ blocked, noFinisher, mixed }, 3, 3)
     local choices = manual()
-    local plan = Route.Build(log, choices, point(0))
+    local plan = Route.Build(log, choices, point(0), nil, nil, keepOneSlotOpen)
     eq(plan.goal, 3)
     eq(plan.steps[1].point.wx, 170)
     eq(plan.status["1:turnin"], "exploration")
     eq(plan.status["2:1"], "exploration")
     assert(plan.reason:find("one may exist", 1, true))
     log.isExplored = nil
-    plan = Route.Build(log, choices, point(0), plan)
+    plan = Route.Build(log, choices, point(0), plan, nil, keepOneSlotOpen)
     eq(#plan.steps, 0)
     eq(plan.byKey["1:turnin"].quest, blocked)
     choices.next = "1:turnin"
-    eq(Route.Build(log, choices, point(0)).steps[1].point, undiscovered)
+    eq(Route.Build(log, choices, point(0), nil, nil, keepOneSlotOpen).steps[1].point, undiscovered)
     log.count = 2
     choices.next = nil
-    eq(Route.Build(log, choices, point(0)).steps[1].quest.id, 2)
+    eq(Route.Build(log, choices, point(0), nil, nil, keepOneSlotOpen).steps[1].quest.id, 2)
 end)
 
 test("exploration adapter only accepts positive evidence from the client", function()
